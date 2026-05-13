@@ -1,12 +1,52 @@
+# --- core / editor quality ---
 eamodio.gitlens
 esbenp.prettier-vscode
+usernamehw.errorlens
+streetsidesoftware.code-spell-checker
+editorconfig.editorconfig
+tamasfe.even-better-toml
+pkief.material-icon-theme
+
+# --- web / JS / TS ---
 dbaeumer.vscode-eslint
-ms-azuretools.vscode-docker
-golang.go
-redhat.vscode-yaml
-hashicorp.terraform
-ms-kubernetes-tools.vscode-kubernetes-tools
-github.copilot
-github.copilot-chat
+biomejs.biome
+prisma.prisma
+graphql.vscode-graphql-syntax
+graphql.vscode-graphql
+bradlc.vscode-tailwindcss
+antfu.unocss
+humao.rest-client
+rangav.vscode-thunder-client
+
+# --- backend / API ---
+ms-python.python
+ms-python.vscode-pylance
+ms-python.debugpy
+charliermarsh.ruff
+batisteo.vscode-django
+mtxr.sqltools
+
+# --- mobile ---
 dart-code.flutter
 dart-code.dart-code
+msjsdiag.vscode-react-native
+
+# --- devops / infra ---
+ms-azuretools.vscode-docker
+ms-kubernetes-tools.vscode-kubernetes-tools
+hashicorp.terraform
+hashicorp.hcl
+redhat.vscode-yaml
+redhat.vscode-xml
+timonwong.shellcheck
+foxundermoon.shell-format
+ms-vscode-remote.remote-ssh
+ms-vscode-remote.remote-containers
+github.vscode-github-actions
+
+# --- go ---
+golang.go
+
+# --- AI ---
+github.copilot
+github.copilot-chat

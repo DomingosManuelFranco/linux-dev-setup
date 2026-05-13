@@ -95,6 +95,14 @@ install_android_cmdline_tools() {
   local archive="$VENDOR_TMP_DIR/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}.zip"
   local sdkmanager_bin="$latest_root/bin/sdkmanager"
 
+  # KVM acceleration check
+  if [[ ! -e /dev/kvm ]]; then
+    warn "KVM (/dev/kvm) not available — Android emulator will run without hardware acceleration and will be very slow."
+    warn "Enable KVM in your BIOS/UEFI, or run: sudo modprobe kvm_intel (or kvm_amd), then add your user to the 'kvm' group."
+  else
+    log "KVM available — Android emulator hardware acceleration enabled"
+  fi
+
   mkdir -p "$tools_root"
 
   if [[ ! -x "$sdkmanager_bin" ]]; then
@@ -225,6 +233,9 @@ install_web_vendor_tools() {
   install_mise_toolchains
   install_uv_if_missing
   install_rustup_if_missing
+  install_mkcert
+  install_mongosh
+  install_usql
 }
 
 install_uv_if_missing() {
@@ -245,6 +256,9 @@ install_mobile_vendor_tools() {
   install_rustup_if_missing
   install_flutter_sdk
   install_android_cmdline_tools
+  install_maestro
+  install_bundletool
+  install_flutter_distributor
 }
 
 install_devops_vendor_tools() {
@@ -261,6 +275,20 @@ install_devops_vendor_tools() {
   install_kubectx_tools
   install_minikube
   install_google_cloud_cli
+  install_argocd
+  install_flux
+  install_gitleaks
+  install_trufflehog
+  install_tflint
+  install_dive
+  install_hadolint
+  install_act
+  install_kubeseal
+  install_skaffold
+  install_syft
+  install_vault
+  install_eksctl
+  install_flyctl
 }
 
 install_google_cloud_cli() {
@@ -279,6 +307,215 @@ install_google_cloud_cli() {
   ln -sfn "$install_dir/bin/gcloud" "$HOME/.local/bin/gcloud"
   ln -sfn "$install_dir/bin/gsutil" "$HOME/.local/bin/gsutil"
   ln -sfn "$install_dir/bin/bq" "$HOME/.local/bin/bq"
+}
+
+# --- Mobile vendor tools ---
+
+install_maestro() {
+  have maestro && return 0
+  log "Installing Maestro (mobile UI testing)"
+  curl -fsSL "https://get.maestro.mobile.dev" | bash >/dev/null 2>&1 || warn "Maestro install failed"
+}
+
+install_bundletool() {
+  have bundletool && return 0
+  log "Installing bundletool"
+  mkdir -p "$HOME/.local/bin" "$VENDOR_TMP_DIR"
+  download_release_asset \
+    "https://github.com/google/bundletool/releases/latest/download/bundletool-all.jar" \
+    "$HOME/.local/share/bundletool.jar"
+  cat > "$HOME/.local/bin/bundletool" <<'SCRIPT'
+#!/usr/bin/env sh
+exec java -jar "$HOME/.local/share/bundletool.jar" "$@"
+SCRIPT
+  chmod 0755 "$HOME/.local/bin/bundletool"
+}
+
+install_flutter_distributor() {
+  have flutter_distributor && return 0
+  if have flutter; then
+    log "Installing flutter_distributor"
+    dart pub global activate flutter_distributor >/dev/null 2>&1 || warn "flutter_distributor install failed"
+  else
+    warn "flutter not found; skipping flutter_distributor"
+  fi
+}
+
+# --- Web vendor tools ---
+
+install_mkcert() {
+  have mkcert && return 0
+  log "Installing mkcert"
+  mkdir -p "$HOME/.local/bin"
+  download_release_asset \
+    "https://github.com/FiloSottile/mkcert/releases/latest/download/mkcert-v$(curl -fsSL https://api.github.com/repos/FiloSottile/mkcert/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')-linux-amd64" \
+    "$HOME/.local/bin/mkcert" 2>/dev/null || \
+  download_release_asset \
+    "$(curl -fsSL https://api.github.com/repos/FiloSottile/mkcert/releases/latest | grep 'browser_download_url.*linux-amd64"' | cut -d'"' -f4)" \
+    "$HOME/.local/bin/mkcert"
+  chmod 0755 "$HOME/.local/bin/mkcert"
+}
+
+install_mongosh() {
+  have mongosh && return 0
+  log "Installing mongosh"
+  local extract_dir="$VENDOR_TMP_DIR/mongosh-extract"
+  local archive="$VENDOR_TMP_DIR/mongosh.tgz"
+  rm -rf "$extract_dir"
+  mkdir -p "$extract_dir" "$VENDOR_TMP_DIR" "$HOME/.local/bin"
+  local version
+  version="$(curl -fsSL https://api.github.com/repos/mongodb-js/mongosh/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')"
+  download_release_asset \
+    "https://github.com/mongodb-js/mongosh/releases/download/v${version}/mongosh-${version}-linux-x64.tgz" \
+    "$archive"
+  tar -xzf "$archive" -C "$extract_dir"
+  local bin
+  bin="$(find "$extract_dir" -name 'mongosh' -type f | head -1)"
+  [[ -n "$bin" ]] && install -m 0755 "$bin" "$HOME/.local/bin/mongosh" || warn "mongosh binary not found in archive"
+}
+
+install_usql() {
+  have usql && return 0
+  install_binary_from_tarball usql \
+    "https://github.com/xo/usql/releases/latest/download/usql-linux-amd64.tar.bz2" \
+    "usql" 2>/dev/null || {
+      # bz2 fallback: download and extract manually
+      log "Installing usql (bz2)"
+      local archive="$VENDOR_TMP_DIR/usql.tar.bz2"
+      local extract_dir="$VENDOR_TMP_DIR/usql-extract"
+      rm -rf "$extract_dir"
+      mkdir -p "$extract_dir" "$VENDOR_TMP_DIR" "$HOME/.local/bin"
+      download_release_asset \
+        "https://github.com/xo/usql/releases/latest/download/usql-linux-amd64.tar.bz2" \
+        "$archive"
+      tar -xjf "$archive" -C "$extract_dir"
+      local bin
+      bin="$(find "$extract_dir" -name 'usql' -type f | head -1)"
+      [[ -n "$bin" ]] && install -m 0755 "$bin" "$HOME/.local/bin/usql" || warn "usql binary not found"
+    }
+}
+
+# --- DevOps vendor tools ---
+
+install_argocd() {
+  have argocd && return 0
+  log "Installing argocd"
+  mkdir -p "$HOME/.local/bin"
+  download_release_asset \
+    "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64" \
+    "$HOME/.local/bin/argocd"
+  chmod 0755 "$HOME/.local/bin/argocd"
+}
+
+install_flux() {
+  have flux && return 0
+  log "Installing flux"
+  curl -fsSL https://fluxcd.io/install.sh | FLUX_VERSION=latest bash -s -- --bin-dir "$HOME/.local/bin" >/dev/null 2>&1 || warn "flux install failed"
+}
+
+install_gitleaks() {
+  have gitleaks && return 0
+  install_binary_from_tarball gitleaks \
+    "https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(curl -fsSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')_linux_x64.tar.gz" \
+    "gitleaks" 2>/dev/null || {
+      log "Trying gitleaks via latest URL pattern"
+      local version
+      version="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/gitleaks/gitleaks/releases/latest)"
+      version="${version##*/v}"
+      install_binary_from_tarball gitleaks \
+        "https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_${version}_linux_x64.tar.gz" \
+        "gitleaks"
+    }
+}
+
+install_trufflehog() {
+  have trufflehog && return 0
+  install_binary_from_tarball trufflehog \
+    "https://github.com/trufflesecurity/trufflehog/releases/latest/download/trufflehog_linux_amd64.tar.gz" \
+    "trufflehog"
+}
+
+install_tflint() {
+  have tflint && return 0
+  install_binary_from_zip tflint \
+    "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip" \
+    "tflint"
+}
+
+install_dive() {
+  have dive && return 0
+  install_binary_from_tarball dive \
+    "https://github.com/wagoodman/dive/releases/latest/download/dive_linux_amd64.tar.gz" \
+    "dive"
+}
+
+install_hadolint() {
+  have hadolint && return 0
+  log "Installing hadolint"
+  mkdir -p "$HOME/.local/bin"
+  download_release_asset \
+    "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64" \
+    "$HOME/.local/bin/hadolint"
+  chmod 0755 "$HOME/.local/bin/hadolint"
+}
+
+install_act() {
+  have act && return 0
+  install_binary_from_tarball act \
+    "https://github.com/nektos/act/releases/latest/download/act_Linux_x86_64.tar.gz" \
+    "act"
+}
+
+install_kubeseal() {
+  have kubeseal && return 0
+  install_binary_from_tarball kubeseal \
+    "https://github.com/bitnami-labs/sealed-secrets/releases/latest/download/kubeseal-linux-amd64.tar.gz" \
+    "kubeseal"
+}
+
+install_skaffold() {
+  have skaffold && return 0
+  log "Installing skaffold"
+  mkdir -p "$HOME/.local/bin"
+  download_release_asset \
+    "https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64" \
+    "$HOME/.local/bin/skaffold"
+  chmod 0755 "$HOME/.local/bin/skaffold"
+}
+
+install_syft() {
+  have syft && return 0
+  log "Installing syft"
+  curl -fsSL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$HOME/.local/bin" >/dev/null 2>&1 || warn "syft install failed"
+}
+
+install_vault() {
+  have vault && return 0
+  log "Installing vault"
+  local extract_dir="$VENDOR_TMP_DIR/vault-extract"
+  local archive="$VENDOR_TMP_DIR/vault.zip"
+  local version
+  version="$(curl -fsSL https://api.github.com/repos/hashicorp/vault/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')"
+  rm -rf "$extract_dir"
+  mkdir -p "$extract_dir" "$VENDOR_TMP_DIR" "$HOME/.local/bin"
+  download_release_asset \
+    "https://releases.hashicorp.com/vault/${version}/vault_${version}_linux_amd64.zip" \
+    "$archive"
+  unzip -qo "$archive" -d "$extract_dir"
+  install -m 0755 "$extract_dir/vault" "$HOME/.local/bin/vault"
+}
+
+install_eksctl() {
+  have eksctl && return 0
+  install_binary_from_tarball eksctl \
+    "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" \
+    "eksctl"
+}
+
+install_flyctl() {
+  have flyctl && return 0
+  log "Installing flyctl"
+  curl -fsSL https://fly.io/install.sh | FLYCTL_INSTALL="$HOME/.local" sh >/dev/null 2>&1 || warn "flyctl install failed"
 }
 
 bootstrap_role_vendors() {

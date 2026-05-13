@@ -1,8 +1,26 @@
-@react-native-community/cli
+# --- shared tooling ---
 @biomejs/biome
-eas-cli
 eslint_d
-yarn
 typescript
 typescript-language-server
 vscode-langservers-extracted
+dotenv-cli
+lefthook
+
+# --- web ---
+yarn
+prisma
+drizzle-kit
+@nestjs/cli
+graphql-language-service-cli
+httpyac
+wrangler
+vercel
+turbo
+nx
+
+# --- mobile ---
+@react-native-community/cli
+@expo/cli
+eas-cli
+detox-cli

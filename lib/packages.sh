@@ -73,6 +73,8 @@ kitty
 alacritty
 rustup
 python-neovim
+ruby
+atuin
 EOF
       ;;
     gnome)
@@ -89,6 +91,8 @@ sqlite
 postgresql-client
 mysql-client
 redis-tools
+mongosh
+mkcert
 EOF
       ;;
     mobile)
@@ -106,6 +110,8 @@ docker-compose
 docker-buildx
 podman
 podman-docker
+buildah
+skopeo
 kubectl
 helm
 kustomize
@@ -115,6 +121,7 @@ packer
 aws-cli
 azure-cli
 age
+hadolint
 EOF
       ;;
     gui)
@@ -178,6 +185,8 @@ map_package() {
     arch:rustup) echo rustup ;;
     arch:uv) echo uv ;;
     arch:python-neovim) echo python-neovim ;;
+    arch:ruby) echo ruby ;;
+    arch:atuin) echo atuin ;;
     arch:nodejs) echo nodejs-lts ;;
     arch:npm) echo npm ;;
     arch:httpie) echo httpie ;;
@@ -185,6 +194,8 @@ map_package() {
     arch:postgresql-client) echo postgresql ;;
     arch:mysql-client) echo mariadb-clients ;;
     arch:redis-tools) echo redis ;;
+    arch:mongosh) return 1 ;;  # installed via vendor step (mongosh binary)
+    arch:mkcert) echo mkcert ;;
     arch:android-tools) echo android-tools ;;
     arch:gradle) echo gradle ;;
     arch:scrcpy) echo scrcpy ;;
@@ -194,6 +205,8 @@ map_package() {
     arch:docker-buildx) echo docker-buildx ;;
     arch:podman) echo podman ;;
     arch:podman-docker) echo podman-docker ;;
+    arch:buildah) echo buildah ;;
+    arch:skopeo) echo skopeo ;;
     arch:kubectl) echo kubectl ;;
     arch:helm) echo helm ;;
     arch:kustomize) echo kustomize ;;
@@ -203,6 +216,7 @@ map_package() {
     arch:aws-cli) echo aws-cli-v2 ;;
     arch:azure-cli) echo azure-cli ;;
     arch:age) echo age ;;
+    arch:hadolint) echo hadolint ;;
     arch:code) echo code ;;
     arch:google-chrome) echo google-chrome ;;
     arch:podman-desktop) echo podman-desktop ;;
@@ -250,6 +264,8 @@ map_package() {
     fedora:rustup) echo rustup ;;
     fedora:uv) echo uv ;;
     fedora:python-neovim) echo python3-neovim ;;
+    fedora:ruby) echo ruby ;;
+    fedora:atuin) echo atuin ;;
     fedora:nodejs) echo nodejs ;;
     fedora:npm) echo npm ;;
     fedora:httpie) echo httpie ;;
@@ -257,6 +273,8 @@ map_package() {
     fedora:postgresql-client) echo postgresql ;;
     fedora:mysql-client) echo community-mysql ;;
     fedora:redis-tools) echo redis ;;
+    fedora:mongosh) return 1 ;;  # installed via vendor step
+    fedora:mkcert) return 1 ;;  # installed via vendor step
     fedora:android-tools) echo android-tools ;;
     fedora:gradle) echo gradle ;;
     fedora:scrcpy) echo scrcpy ;;
@@ -266,6 +284,8 @@ map_package() {
     fedora:docker-buildx) echo docker-buildx-plugin ;;
     fedora:podman) echo podman ;;
     fedora:podman-docker) echo podman-docker ;;
+    fedora:buildah) echo buildah ;;
+    fedora:skopeo) echo skopeo ;;
     fedora:kubectl) echo kubernetes-client ;;
     fedora:helm) echo helm ;;
     fedora:kustomize) echo kustomize ;;
@@ -275,6 +295,7 @@ map_package() {
     fedora:aws-cli) echo awscli2 ;;
     fedora:azure-cli) echo azure-cli ;;
     fedora:age) echo age ;;
+    fedora:hadolint) return 1 ;;  # installed via vendor step
     fedora:code) echo code ;;
     fedora:google-chrome) echo google-chrome-stable ;;
     fedora:podman-desktop) echo podman-desktop ;;
@@ -322,6 +343,8 @@ map_package() {
     ubuntu:rustup|debian:rustup|pikaos:rustup) return 1 ;;
     ubuntu:uv|debian:uv|pikaos:uv) return 1 ;;
     ubuntu:python-neovim|debian:python-neovim|pikaos:python-neovim) echo python3-neovim ;;
+    ubuntu:ruby|debian:ruby|pikaos:ruby) echo ruby ;;
+    ubuntu:atuin|debian:atuin|pikaos:atuin) echo atuin ;;
     ubuntu:nodejs|debian:nodejs|pikaos:nodejs) echo nodejs ;;
     ubuntu:npm|debian:npm|pikaos:npm) echo npm ;;
     ubuntu:httpie|debian:httpie|pikaos:httpie) echo httpie ;;
@@ -329,6 +352,8 @@ map_package() {
     ubuntu:postgresql-client|debian:postgresql-client|pikaos:postgresql-client) echo postgresql-client ;;
     ubuntu:mysql-client|debian:mysql-client|pikaos:mysql-client) echo default-mysql-client ;;
     ubuntu:redis-tools|debian:redis-tools|pikaos:redis-tools) echo redis-tools ;;
+    ubuntu:mongosh|debian:mongosh|pikaos:mongosh) return 1 ;;  # installed via vendor step
+    ubuntu:mkcert|debian:mkcert|pikaos:mkcert) return 1 ;;    # installed via vendor step
     ubuntu:android-tools|debian:android-tools|pikaos:android-tools) echo adb ;;
     ubuntu:gradle|debian:gradle|pikaos:gradle) echo gradle ;;
     ubuntu:scrcpy|debian:scrcpy|pikaos:scrcpy) echo scrcpy ;;
@@ -338,6 +363,8 @@ map_package() {
     ubuntu:docker-buildx|debian:docker-buildx|pikaos:docker-buildx) echo docker-buildx-plugin ;;
     ubuntu:podman|debian:podman|pikaos:podman) echo podman ;;
     ubuntu:podman-docker|debian:podman-docker|pikaos:podman-docker) echo podman-docker ;;
+    ubuntu:buildah|debian:buildah|pikaos:buildah) echo buildah ;;
+    ubuntu:skopeo|debian:skopeo|pikaos:skopeo) echo skopeo ;;
     ubuntu:kubectl|debian:kubectl|pikaos:kubectl) echo kubectl ;;
     ubuntu:helm|debian:helm|pikaos:helm) echo helm ;;
     ubuntu:kustomize|debian:kustomize|pikaos:kustomize) printf '[dev-setup] warning: kustomize not in apt repos; install manually or via vendor binary\n' >&2; return 1 ;;
@@ -347,6 +374,7 @@ map_package() {
     ubuntu:aws-cli|debian:aws-cli|pikaos:aws-cli) echo awscli ;;
     ubuntu:azure-cli|debian:azure-cli|pikaos:azure-cli) echo azure-cli ;;
     ubuntu:age|debian:age|pikaos:age) echo age ;;
+    ubuntu:hadolint|debian:hadolint|pikaos:hadolint) return 1 ;;  # installed via vendor step
     ubuntu:code|debian:code|pikaos:code) printf '[dev-setup] warning: VS Code (code) not in apt repos; add Microsoft repo or install manually\n' >&2; return 1 ;;
     ubuntu:google-chrome|debian:google-chrome|pikaos:google-chrome) printf '[dev-setup] warning: Google Chrome not in apt repos; add Google repo or install manually\n' >&2; return 1 ;;
     ubuntu:podman-desktop|debian:podman-desktop|pikaos:podman-desktop) printf '[dev-setup] warning: Podman Desktop not in apt repos; install from https://podman-desktop.io manually\n' >&2; return 1 ;;
@@ -394,6 +422,8 @@ map_package() {
     opensuse:rustup) echo rustup ;;
     opensuse:uv) return 1 ;;
     opensuse:python-neovim) echo python3-neovim ;;
+    opensuse:ruby) echo ruby ;;
+    opensuse:atuin) echo atuin ;;
     opensuse:nodejs) echo nodejs-default ;;
     opensuse:npm) echo npm-default ;;
     opensuse:httpie) echo httpie ;;
@@ -401,6 +431,8 @@ map_package() {
     opensuse:postgresql-client) echo postgresql ;;
     opensuse:mysql-client) echo mariadb-client ;;
     opensuse:redis-tools) echo redis ;;
+    opensuse:mongosh) return 1 ;;  # installed via vendor step
+    opensuse:mkcert) return 1 ;;  # installed via vendor step
     opensuse:android-tools) echo android-tools ;;
     opensuse:gradle) echo gradle ;;
     opensuse:scrcpy) echo scrcpy ;;
@@ -410,6 +442,8 @@ map_package() {
     opensuse:docker-buildx) echo docker-buildx ;;
     opensuse:podman) echo podman ;;
     opensuse:podman-docker) echo podman-docker ;;
+    opensuse:buildah) echo buildah ;;
+    opensuse:skopeo) echo skopeo ;;
     opensuse:kubectl) echo kubernetes-client ;;
     opensuse:helm) echo helm ;;
     opensuse:kustomize) echo kustomize ;;
@@ -419,6 +453,7 @@ map_package() {
     opensuse:aws-cli) echo aws-cli ;;
     opensuse:azure-cli) echo azure-cli ;;
     opensuse:age) echo age ;;
+    opensuse:hadolint) return 1 ;;  # installed via vendor step
     opensuse:code) echo code ;;
     opensuse:google-chrome) echo google-chrome-stable ;;
     opensuse:podman-desktop) echo podman-desktop ;;

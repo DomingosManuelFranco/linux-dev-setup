@@ -101,6 +101,13 @@ setup_corepack() {
 setup_pipx() {
   pipx ensurepath >/dev/null 2>&1 || true
   pipx install --force poetry >/dev/null 2>&1 || true
+  pipx install --force checkov >/dev/null 2>&1 || true
+  # fastlane requires Ruby; install only if gem is available
+  if have gem; then
+    gem install fastlane --user-install >/dev/null 2>&1 || warn "fastlane gem install failed; ensure Ruby >= 2.7 is available"
+  else
+    warn "gem not found; skipping fastlane — install Ruby then run: gem install fastlane"
+  fi
 }
 
 setup_rust() {
@@ -133,7 +140,7 @@ install_vscode_extensions() {
   fi
 
   while IFS= read -r extension; do
-    [[ -z "$extension" ]] && continue
+    [[ -z "$extension" || "$extension" == \#* ]] && continue
     "$code_bin" --install-extension "$extension" >/dev/null 2>&1 || warn "Failed to install VS Code extension $extension"
   done < "$ext_file"
 }
