@@ -8,9 +8,86 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 source "$REPO_ROOT/lib/common.sh"
 # shellcheck source=../lib/packages.sh
 source "$REPO_ROOT/lib/packages.sh"
+# shellcheck source=../lib/vendor.sh
+source "$REPO_ROOT/lib/vendor.sh"
 
 DESKTOP=""
 INSTALL_OPTIONAL=0
+INSTALL_VENDOR=1
+ROLES=(base web mobile devops)
+
+parse_roles() {
+  local role_csv="$1"
+  local raw role
+  local -a parsed=()
+
+  IFS=',' read -r -a raw <<< "$role_csv"
+  for role in "${raw[@]}"; do
+    case "$role" in
+      base|web|mobile|devops)
+        parsed+=("$role")
+        ;;
+      *)
+        warn "Unsupported role: $role"
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ ${#parsed[@]} -eq 0 ]]; then
+    warn "At least one role must be selected"
+    exit 1
+  fi
+
+  ROLES=("${parsed[@]}")
+}
+
+dedupe_packages() {
+  local pkg
+  declare -A seen=()
+  for pkg in "$@"; do
+    [[ -z "$pkg" ]] && continue
+    if [[ -z "${seen[$pkg]:-}" ]]; then
+      seen[$pkg]=1
+      printf '%s\n' "$pkg"
+    fi
+  done
+}
+
+collect_packages() {
+  local distro="$1"
+  local -a selected=()
+  local role
+
+  for role in "${ROLES[@]}"; do
+    while IFS= read -r package; do
+      [[ -n "$package" ]] && selected+=("$package")
+    done < <(resolve_packages "$distro" "$role")
+  done
+
+  if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
+    while IFS= read -r package; do
+      [[ -n "$package" ]] && selected+=("$package")
+    done < <(resolve_packages "$distro" gui)
+  fi
+
+  dedupe_packages "${selected[@]}"
+}
+
+bootstrap_selected_vendors() {
+  local role
+  if [[ "$INSTALL_VENDOR" -ne 1 ]]; then
+    return 0
+  fi
+
+  for role in "${ROLES[@]}"; do
+    bootstrap_role_vendors "$role"
+  done
+
+  if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
+    bootstrap_optional_vendors
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -22,12 +99,22 @@ while [[ $# -gt 0 ]]; do
       INSTALL_OPTIONAL=1
       shift
       ;;
+    --roles)
+      parse_roles "${2:-}"
+      shift 2
+      ;;
+    --no-vendor)
+      INSTALL_VENDOR=0
+      shift
+      ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./scripts/install.sh [--desktop gnome|kde] [--optional]
+Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor]
 
-  --desktop   apply optional desktop-specific settings
-  --optional  also attempt optional packages like VS Code and Chrome
+  --desktop    apply optional desktop-specific settings
+  --roles      comma-separated install roles; defaults to base,web,mobile,devops
+  --optional   also attempt GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop
+  --no-vendor  skip vendor bootstraps like mise, Flutter SDK, and Android SDK components
 EOF
       exit 0
       ;;
@@ -44,6 +131,7 @@ if ! distro="$(detect_distro)"; then
 fi
 
 log "Detected distro: $distro"
+log "Selected roles: ${ROLES[*]}"
 
 filter_arch_packages() {
   local pkg available=()
@@ -95,92 +183,54 @@ filter_zypper_packages() {
 
 install_arch() {
   local -a packages=() filtered=()
-  mapfile -t packages < <(resolve_packages arch base)
+  mapfile -t packages < <(collect_packages arch)
   mapfile -t filtered < <(filter_arch_packages "${packages[@]}")
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo pacman -Syu --needed --noconfirm "${filtered[@]}"
-  fi
-
-  if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
-    if have yay; then
-      local -a optional=() filtered_optional=()
-      mapfile -t optional < <(resolve_packages arch optional)
-      mapfile -t filtered_optional < <(printf '%s\n' "${optional[@]}")
-      if [[ ${#filtered_optional[@]} -gt 0 ]]; then
-        yay -S --needed --noconfirm "${filtered_optional[@]}" || warn "Some optional AUR packages failed"
-      fi
-    else
-      warn "yay not found; skipping Arch optional packages"
-    fi
   fi
 }
 
 install_fedora() {
   local -a packages=() filtered=()
-  mapfile -t packages < <(resolve_packages fedora base)
+  mapfile -t packages < <(collect_packages fedora)
   mapfile -t filtered < <(filter_fedora_packages "${packages[@]}")
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo dnf install -y "${filtered[@]}"
   fi
-
-  if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
-    local -a optional=() filtered_optional=()
-    mapfile -t optional < <(resolve_packages fedora optional)
-    mapfile -t filtered_optional < <(filter_fedora_packages "${optional[@]}")
-    if [[ ${#filtered_optional[@]} -gt 0 ]]; then
-      sudo dnf install -y "${filtered_optional[@]}" || warn "Some optional Fedora packages failed"
-    fi
-  fi
 }
 
-install_ubuntu_like() {
+install_apt_like() {
   local distro_name="$1"
   local -a packages=() filtered=()
   sudo apt-get update
-  mapfile -t packages < <(resolve_packages "$distro_name" base)
+  mapfile -t packages < <(collect_packages "$distro_name")
   mapfile -t filtered < <(filter_apt_packages "${packages[@]}")
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo apt-get install -y "${filtered[@]}"
-  fi
-
-  if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
-    local -a optional=() filtered_optional=()
-    mapfile -t optional < <(resolve_packages "$distro_name" optional)
-    mapfile -t filtered_optional < <(filter_apt_packages "${optional[@]}")
-    if [[ ${#filtered_optional[@]} -gt 0 ]]; then
-      sudo apt-get install -y "${filtered_optional[@]}" || warn "Some optional apt packages failed"
-    fi
   fi
 }
 
 install_opensuse() {
   local -a packages=() filtered=()
-  mapfile -t packages < <(resolve_packages opensuse base)
+  mapfile -t packages < <(collect_packages opensuse)
   mapfile -t filtered < <(filter_zypper_packages "${packages[@]}")
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo zypper --non-interactive install --no-recommends "${filtered[@]}"
-  fi
-
-  if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
-    local -a optional=() filtered_optional=()
-    mapfile -t optional < <(resolve_packages opensuse optional)
-    mapfile -t filtered_optional < <(filter_zypper_packages "${optional[@]}")
-    if [[ ${#filtered_optional[@]} -gt 0 ]]; then
-      sudo zypper --non-interactive install --no-recommends "${filtered_optional[@]}" || warn "Some optional openSUSE packages failed"
-    fi
   fi
 }
 
 case "$distro" in
   arch) install_arch ;;
   fedora) install_fedora ;;
-  ubuntu) install_ubuntu_like ubuntu ;;
-  pikaos) install_ubuntu_like pikaos ;;
+  ubuntu) install_apt_like ubuntu ;;
+  debian) install_apt_like debian ;;
+  pikaos) install_apt_like pikaos ;;
   opensuse) install_opensuse ;;
 esac
 
 link_dotfiles
 render_templates
+bootstrap_selected_vendors
 setup_corepack
 setup_pipx
 setup_rust

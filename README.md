@@ -1,23 +1,26 @@
 # Portable Dev Setup
 
-Portable Linux development environment for GNOME and KDE Plasma across:
+Portable Linux development environment across:
 
 - Fedora
 - Arch Linux
 - openSUSE Tumbleweed
-- Ubuntu
-- PikaOS
+- Debian-based distros including Ubuntu and PikaOS
 
-This repo packages your shell, terminal, editor, CLI, and theme setup into a portable dotfiles-style repository. It avoids machine-specific state, keeps desktop integration optional, and is structured for direct GitHub publishing.
+This repo packages your shell, terminal, editor, and CLI setup into a portable dotfiles-style repository for web, mobile, and DevOps work. It avoids machine-specific state, keeps desktop-specific customization minimal, and is structured for direct GitHub publishing.
 
 ## Features
 
 - Shared shell environment for `bash` and `zsh`
+- Role-based bootstrap for base, web, mobile, and DevOps tooling
+- `mise` runtime bootstrap for Node.js, Python, Java, Go, Rust, Bun, and Deno
+- Flutter SDK and Android SDK command-line bootstrap for mobile work
+- Upstream installer bootstrap for cross-distro DevOps tools like `terragrunt`, `stern`, `trivy`, `sops`, `cosign`, `kind`, `k9s`, `kubectx`, `kubens`, and `minikube`
 - Starship prompt, tmux workflow config, and Atuin defaults
 - VS Code extensions, settings, and keybindings
 - CLI tooling for web, cloud, containers, Kubernetes, Terraform, and general development
 - Kitty, Alacritty, btop, GTK overrides, Git defaults, and MIME defaults
-- Portable theme assets for DankMaterialShell and KDE
+- KDE color scheme asset
 - Optional GNOME defaults
 - Optional KDE Plasma defaults
 
@@ -41,6 +44,21 @@ chmod +x scripts/*.sh
 ./scripts/install.sh
 ```
 
+Default roles installed by `./scripts/install.sh`:
+
+- `base`
+- `web`
+- `mobile`
+- `devops`
+
+Examples:
+
+```bash
+./scripts/install.sh --roles base,web,devops
+./scripts/install.sh --roles base,mobile --optional
+./scripts/install.sh --no-vendor
+```
+
 Optional desktop profile:
 
 ```bash
@@ -51,21 +69,24 @@ Optional desktop profile:
 ## Install Behavior
 
 - Detects distro package manager automatically
-- Installs a conservative base package set with distro-specific package names
-- Can also attempt optional cloud, container, Kubernetes, editor, and browser packages with `--optional`
+- Installs selected role groups with distro-specific package names
+- Installs all of `base`, `web`, `mobile`, and `devops` by default
+- Can also attempt optional GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop with `--optional`
 - Links the portable config into your home directory
-- Renders path-aware config templates for VS Code and DankMaterialShell
+- Renders path-aware config templates for VS Code
+- Bootstraps `mise`, Flutter, Android SDK components, and upstream DevOps binaries unless `--no-vendor` is used
 - Backs up conflicting existing files into `~/.local/share/dev-setup-portable/backups/<timestamp>/`
 - Applies optional GNOME or KDE defaults only when requested
 
 ## Included Config
 
 - Shell: `.zshrc`, `.bashrc`, `.profile`, shared shell helpers
+- Runtime manager: `mise` config for Node.js, Python, Java, Go, Rust, Bun, and Deno
 - Prompt and terminal: Starship, Kitty, Alacritty
 - CLI UX: tmux, btop, Atuin
 - Editor: VS Code extensions, settings, keybindings
 - Desktop defaults: GTK overrides, MIME defaults, GNOME/KDE apply scripts
-- Theme assets: DankMaterialShell theme, KDE color scheme
+- Theme assets: KDE color scheme
 
 ## Supported desktops
 
@@ -83,18 +104,20 @@ Installs a matching color scheme and basic terminal/browser defaults where possi
 
 ## Notes
 
-- Some packages are not available under the exact same name on every distro. The installer maps names per distro and skips unsupported optional packages.
-- GUI application installation is intentionally conservative. Browsers, VS Code variants, Docker Desktop, and Google Cloud CLI may still require vendor repos or manual install depending on the distro.
+- Some packages are not available under the exact same name on every distro. The installer maps names per distro and skips unsupported packages when necessary.
+- Some tools still depend on upstream downloads on specific distros. The script handles `mise`, Flutter, Android SDK components, and several DevOps tools directly, but some GUI apps may still be skipped when the package is unavailable.
 - `docker.service` is enabled only if Docker is installed and systemd is available.
 - `podman.socket` is enabled for the user session when available.
+- Android SDK installation accepts licenses automatically and installs `platform-tools`, `platforms;android-35`, `build-tools;35.0.0`, and `emulator`.
+- Upstream-installed binaries are placed in `~/.local/bin`.
 
 ## Publishing Checklist
 
 1. Update the repo URL in the quick start block.
 2. Review `scripts/install.sh` package selections for your preferred toolset.
-3. Add screenshots if you want to show the theme.
+3. Add screenshots if you want to show the terminal/editor setup.
 4. Push to GitHub and add a short repo description.
 
 ## License
 
-Add your preferred license before publishing.
+This repo is licensed under the MIT License.

@@ -1,0 +1,8 @@
+[tools]
+node = "lts"
+python = "3.12"
+java = "temurin-21"
+go = "latest"
+rust = "stable"
+bun = "latest"
+deno = "latest"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/go/bin:$PATH"
+export PATH="$HOME/.local/share/mise/shims:$HOME/.local/share/mise/bin:$PATH"
 
 if [[ -d "$HOME/.atuin/bin" ]]; then
   export PATH="$HOME/.atuin/bin:$PATH"

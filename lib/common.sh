@@ -130,5 +130,5 @@ install_vscode_extensions() {
 install_npm_globals() {
   mkdir -p "$HOME/.local/bin"
   npm config set prefix "$HOME/.local" >/dev/null 2>&1 || true
-  npm install -g @react-native-community/cli eas-cli yarn typescript typescript-language-server vscode-langservers-extracted >/dev/null 2>&1 || true
+  npm install -g @react-native-community/cli @biomejs/biome eas-cli eslint_d yarn typescript typescript-language-server vscode-langservers-extracted >/dev/null 2>&1 || true
 }
