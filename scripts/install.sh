@@ -14,6 +14,8 @@ source "$REPO_ROOT/lib/vendor.sh"
 DESKTOP=""
 INSTALL_OPTIONAL=0
 INSTALL_VENDOR=1
+SETUP_GIT=1
+SETUP_GITHUB=1
 ROLES=(base web mobile devops)
 
 detect_desktop() {
@@ -134,14 +136,24 @@ while [[ $# -gt 0 ]]; do
       INSTALL_VENDOR=0
       shift
       ;;
+    --no-git)
+      SETUP_GIT=0
+      shift
+      ;;
+    --no-github)
+      SETUP_GITHUB=0
+      shift
+      ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor]
+Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor] [--no-git] [--no-github]
 
   --desktop    apply optional desktop-specific settings
   --roles      comma-separated install roles; defaults to base,web,mobile,devops
   --optional   also attempt GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop
   --no-vendor  skip vendor bootstraps like mise, Flutter SDK, and Android SDK components
+  --no-git     skip interactive git user configuration
+  --no-github  skip GitHub authentication and SSH key setup
 EOF
       exit 0
       ;;
@@ -271,6 +283,14 @@ setup_rust
 install_npm_globals
 install_vscode_extensions
 enable_systemd_units
+
+if [[ "$SETUP_GIT" -eq 1 ]]; then
+  setup_git
+fi
+
+if [[ "$SETUP_GITHUB" -eq 1 ]]; then
+  setup_github
+fi
 
 if have chsh && have zsh; then
   if [[ "${SHELL:-}" != "$(command -v zsh)" ]]; then

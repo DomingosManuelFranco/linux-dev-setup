@@ -145,6 +145,152 @@ install_vscode_extensions() {
   done < "$ext_file"
 }
 
+setup_git() {
+  # Skip if git is not installed
+  if ! have git; then
+    warn "git not found; skipping git configuration"
+    return 0
+  fi
+
+  # Read existing values as defaults so re-runs are non-destructive
+  local current_name current_email
+  current_name="$(git config --global user.name 2>/dev/null || true)"
+  current_email="$(git config --global user.email 2>/dev/null || true)"
+
+  # Prompt for name
+  local git_name
+  if [[ -n "$current_name" ]]; then
+    printf '[dev-setup] Git user.name [%s]: ' "$current_name"
+  else
+    printf '[dev-setup] Git user.name: '
+  fi
+  IFS= read -r git_name
+  git_name="${git_name:-$current_name}"
+
+  if [[ -z "$git_name" ]]; then
+    warn "No git user.name provided; skipping git configuration"
+    return 0
+  fi
+
+  # Prompt for email
+  local git_email
+  if [[ -n "$current_email" ]]; then
+    printf '[dev-setup] Git user.email [%s]: ' "$current_email"
+  else
+    printf '[dev-setup] Git user.email: '
+  fi
+  IFS= read -r git_email
+  git_email="${git_email:-$current_email}"
+
+  if [[ -z "$git_email" ]]; then
+    warn "No git user.email provided; skipping git configuration"
+    return 0
+  fi
+
+  git config --global user.name  "$git_name"
+  git config --global user.email "$git_email"
+
+  # Sensible global defaults (only set if not already configured)
+  git config --global --get core.editor      >/dev/null 2>&1 || git config --global core.editor      "nvim"
+  git config --global --get core.autocrlf    >/dev/null 2>&1 || git config --global core.autocrlf    "input"
+  git config --global --get core.pager       >/dev/null 2>&1 || git config --global core.pager       "delta"
+  git config --global --get init.defaultBranch >/dev/null 2>&1 || git config --global init.defaultBranch "main"
+  git config --global --get pull.rebase      >/dev/null 2>&1 || git config --global pull.rebase      "true"
+  git config --global --get push.autoSetupRemote >/dev/null 2>&1 || git config --global push.autoSetupRemote "true"
+  git config --global --get rebase.autoStash >/dev/null 2>&1 || git config --global rebase.autoStash "true"
+  git config --global --get fetch.prune      >/dev/null 2>&1 || git config --global fetch.prune      "true"
+  git config --global --get diff.colorMoved  >/dev/null 2>&1 || git config --global diff.colorMoved  "zebra"
+
+  # delta pager options (only if delta is available)
+  if have delta; then
+    git config --global --get delta.navigate   >/dev/null 2>&1 || git config --global delta.navigate   "true"
+    git config --global --get delta.side-by-side >/dev/null 2>&1 || git config --global delta.side-by-side "true"
+    git config --global --get delta.line-numbers >/dev/null 2>&1 || git config --global delta.line-numbers "true"
+    git config --global --get merge.conflictstyle >/dev/null 2>&1 || git config --global merge.conflictstyle "diff3"
+  fi
+
+  # Useful aliases (skip if already set)
+  git config --global --get alias.st   >/dev/null 2>&1 || git config --global alias.st   "status -sb"
+  git config --global --get alias.co   >/dev/null 2>&1 || git config --global alias.co   "checkout"
+  git config --global --get alias.br   >/dev/null 2>&1 || git config --global alias.br   "branch -vv"
+  git config --global --get alias.lg   >/dev/null 2>&1 || git config --global alias.lg   "log --oneline --graph --decorate --all"
+  git config --global --get alias.undo >/dev/null 2>&1 || git config --global alias.undo "reset HEAD~1 --mixed"
+  git config --global --get alias.wip  >/dev/null 2>&1 || git config --global alias.wip  "!git add -A && git commit -m 'wip'"
+
+  log "Git configured for $git_name <$git_email>"
+}
+
+setup_github() {
+  # Requires gh (GitHub CLI) in PATH
+  if ! have gh; then
+    warn "gh (GitHub CLI) not found; skipping GitHub account setup"
+    return 0
+  fi
+
+  # Check if already authenticated
+  if gh auth status >/dev/null 2>&1; then
+    local current_user
+    current_user="$(gh api user --jq '.login' 2>/dev/null || true)"
+    log "GitHub already authenticated as ${current_user:-unknown}; skipping auth"
+  else
+    log "Starting GitHub authentication (browser or token)…"
+    gh auth login --git-protocol ssh --web || \
+      gh auth login --git-protocol ssh     || \
+      warn "GitHub auth failed; run 'gh auth login' manually"
+  fi
+
+  # Generate SSH key if none exists for this machine
+  local ssh_key="$HOME/.ssh/id_ed25519"
+  if [[ ! -f "$ssh_key" ]]; then
+    local git_email
+    git_email="$(git config --global user.email 2>/dev/null || true)"
+
+    if [[ -z "$git_email" ]]; then
+      printf '[dev-setup] Email for SSH key: '
+      IFS= read -r git_email
+    fi
+
+    if [[ -n "$git_email" ]]; then
+      log "Generating SSH key for $git_email…"
+      mkdir -p "$HOME/.ssh"
+      chmod 700 "$HOME/.ssh"
+      ssh-keygen -t ed25519 -C "$git_email" -f "$ssh_key" -N ""
+      log "SSH key generated: $ssh_key"
+    else
+      warn "No email provided; skipping SSH key generation"
+      return 0
+    fi
+  else
+    log "SSH key already exists: $ssh_key"
+  fi
+
+  # Upload key to GitHub if gh is authenticated
+  if gh auth status >/dev/null 2>&1; then
+    local hostname key_title
+    hostname="$(hostname -s 2>/dev/null || printf 'linux')"
+    key_title="$hostname-ed25519"
+
+    # Check if this exact public key is already uploaded
+    local pub_key
+    pub_key="$(cat "${ssh_key}.pub")"
+    if gh ssh-key list 2>/dev/null | grep -qF "${pub_key%% *}"; then
+      log "SSH public key already on GitHub; skipping upload"
+    else
+      gh ssh-key add "${ssh_key}.pub" --title "$key_title" \
+        && log "SSH public key uploaded to GitHub as '$key_title'" \
+        || warn "Could not upload SSH key to GitHub; add it manually at https://github.com/settings/ssh/new"
+    fi
+  fi
+
+  # Ensure SSH agent knows about the key
+  if [[ -f "$ssh_key" ]]; then
+    eval "$(ssh-agent -s)" >/dev/null 2>&1 || true
+    ssh-add "$ssh_key" >/dev/null 2>&1 || true
+  fi
+
+  log "GitHub setup complete"
+}
+
 install_npm_globals() {
   local globals_file="$REPO_ROOT/config/npm/globals.txt"
 
