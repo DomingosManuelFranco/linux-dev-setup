@@ -16,6 +16,27 @@ INSTALL_OPTIONAL=0
 INSTALL_VENDOR=1
 ROLES=(base web mobile devops)
 
+detect_desktop() {
+  local current_desktop session_desktop session
+
+  current_desktop="${XDG_CURRENT_DESKTOP:-}"
+  session_desktop="${DESKTOP_SESSION:-}"
+  session="${XDG_SESSION_DESKTOP:-}"
+
+  case "${current_desktop,,}:${session_desktop,,}:${session,,}" in
+    *gnome*:*:*|*:*gnome*:*|*:*:*gnome*)
+      printf 'gnome\n'
+      return 0
+      ;;
+    *kde*:*:*|*plasma*:*:*|*:*kde*:*|*:*plasma*:*|*:*:*kde*|*:*:*plasma*)
+      printf 'kde\n'
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
 parse_roles() {
   local role_csv="$1"
   local raw role
@@ -130,8 +151,15 @@ if ! distro="$(detect_distro)"; then
   exit 1
 fi
 
+if [[ -z "$DESKTOP" ]] && detected_desktop="$(detect_desktop 2>/dev/null)"; then
+  DESKTOP="$detected_desktop"
+fi
+
 log "Detected distro: $distro"
 log "Selected roles: ${ROLES[*]}"
+if [[ -n "$DESKTOP" ]]; then
+  log "Detected desktop profile: $DESKTOP"
+fi
 
 filter_arch_packages() {
   local pkg available=()

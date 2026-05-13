@@ -66,9 +66,12 @@ Optional desktop profile:
 ./scripts/install.sh --desktop kde
 ```
 
+If `--desktop` is not provided, the installer will try to detect GNOME or KDE automatically from the current session and apply the matching profile.
+
 ## Install Behavior
 
 - Detects distro package manager automatically
+- Detects GNOME or KDE automatically when possible
 - Installs selected role groups with distro-specific package names
 - Installs all of `base`, `web`, `mobile`, and `devops` by default
 - Can also attempt optional GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop with `--optional`
