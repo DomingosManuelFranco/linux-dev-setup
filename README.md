@@ -44,16 +44,10 @@ chmod +x scripts/*.sh
 ./scripts/install.sh
 ```
 
-Default roles installed by `./scripts/install.sh`:
-
-- `base`
-- `web`
-- `mobile`
-- `devops`
-
-Examples:
+Default role installed by `./scripts/install.sh` is `base` only. Additional roles must be opted into explicitly:
 
 ```bash
+./scripts/install.sh                          # base only
 ./scripts/install.sh --roles base,web,devops
 ./scripts/install.sh --roles base,mobile --optional
 ./scripts/install.sh --no-vendor
@@ -73,12 +67,14 @@ If `--desktop` is not provided, the installer will try to detect GNOME or KDE au
 - Detects distro package manager automatically
 - Detects GNOME or KDE automatically when possible
 - Installs selected role groups with distro-specific package names
-- Installs all of `base`, `web`, `mobile`, and `devops` by default
+- Installs `base` role only by default; additional roles must be specified with `--roles`
 - Can also attempt optional GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop with `--optional`
 - Links the portable config into your home directory
 - Renders path-aware config templates for VS Code
-- Bootstraps `mise`, Flutter, Android SDK components, and upstream DevOps binaries unless `--no-vendor` is used
+- Bootstraps `mise`, Flutter, Android SDK components, and upstream DevOps binaries unless `--no-vendor` is used; vendor tools are fetched at their latest GitHub release automatically
+- Detects installed browser (Chrome → Chromium → Firefox → Brave) and writes MIME handler entries dynamically
 - Backs up conflicting existing files into `~/.local/share/dev-setup-portable/backups/<timestamp>/`
+- Writes a full install log to `~/.local/share/dev-setup-portable/install-<timestamp>.log`
 - Applies optional GNOME or KDE defaults only when requested
 
 ## Included Config
@@ -86,7 +82,7 @@ If `--desktop` is not provided, the installer will try to detect GNOME or KDE au
 - Shell: `.zshrc`, `.bashrc`, `.profile`, shared shell helpers
 - Runtime manager: `mise` config for Node.js, Python, Java, Go, Rust, Bun, and Deno
 - Prompt and terminal: Starship, Kitty, Alacritty
-- CLI UX: tmux, btop, Atuin
+- CLI UX: tmux (with sessionizer, cheatsheet, and clipboard-bridge scripts), btop, Atuin
 - Editor: VS Code extensions, settings, keybindings
 - Desktop defaults: GTK overrides, MIME defaults, GNOME/KDE apply scripts
 - Theme assets: KDE color scheme
