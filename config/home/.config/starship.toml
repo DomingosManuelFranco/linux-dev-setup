@@ -1,0 +1,130 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+format = """
+[](red)\
+$os\
+$username\
+[](bg:peach fg:red)\
+$directory\
+[](fg:peach bg:lavender)\
+$git_branch\
+$git_status\
+$nodejs\
+$python\
+$golang\
+$rust\
+$docker_context\
+$kubernetes\
+$time\
+[ ](fg:lavender)\
+$line_break\
+$character"""
+
+palette = 'catppuccin_mocha'
+
+[palettes.catppuccin_mocha]
+rosewater = "#f5e0dc"
+flamingo = "#f2cdcd"
+pink = "#f5c2e7"
+mauve = "#cba6f7"
+red = "#f38ba8"
+maroon = "#eba0ac"
+peach = "#fab387"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+teal = "#94e2d5"
+sky = "#89dceb"
+sapphire = "#74c7ec"
+blue = "#89b4fa"
+lavender = "#b4befe"
+text = "#cdd6f4"
+subtext1 = "#bac2de"
+subtext0 = "#a6adc8"
+overlay2 = "#9399b2"
+overlay1 = "#7f849c"
+overlay0 = "#6c7086"
+surface2 = "#585b70"
+surface1 = "#45475a"
+surface0 = "#313244"
+base = "#1e1e2e"
+mantle = "#181825"
+crust = "#11111b"
+
+[os]
+disabled = false
+style = "bg:red fg:crust"
+
+[os.symbols]
+Arch = "󰣇"
+Linux = "󰌽"
+
+[username]
+show_always = true
+style_user = "bg:red fg:crust"
+style_root = "bg:red fg:crust"
+format = '[ $user ]($style)'
+
+[directory]
+style = "bg:peach fg:crust"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncate_to_repo = true
+truncation_symbol = "…/"
+
+[git_branch]
+symbol = ""
+style = "fg:lavender bg:lavender"
+format = '[ $symbol $branch](fg:crust bg:lavender)'
+
+[git_status]
+style = "fg:lavender bg:lavender"
+format = '[ $all_status$ahead_behind](fg:crust bg:lavender)'
+
+[nodejs]
+symbol = ""
+style = "fg:lavender bg:lavender"
+format = '[ $symbol( $version)](fg:crust bg:lavender)'
+
+[python]
+symbol = ""
+style = "fg:lavender bg:lavender"
+format = '[ $symbol( $version)](fg:crust bg:lavender)'
+
+[golang]
+symbol = ""
+style = "fg:lavender bg:lavender"
+format = '[ $symbol( $version)](fg:crust bg:lavender)'
+
+[rust]
+symbol = ""
+style = "fg:lavender bg:lavender"
+format = '[ $symbol( $version)](fg:crust bg:lavender)'
+
+[docker_context]
+symbol = ""
+style = "fg:lavender bg:lavender"
+format = '[ $symbol( $context)](fg:crust bg:lavender)'
+
+[kubernetes]
+disabled = false
+symbol = "󱃾"
+style = "fg:lavender bg:lavender"
+format = '[ $symbol( $context)( $namespace)](fg:crust bg:lavender)'
+
+[time]
+disabled = false
+time_format = "%R"
+style = "bg:lavender"
+format = '[[  $time ](fg:crust bg:lavender)]($style)'
+
+[line_break]
+disabled = false
+
+[character]
+disabled = false
+success_symbol = '[❯](bold fg:green)'
+error_symbol = '[❯](bold fg:red)'
+vimcmd_symbol = '[❮](bold fg:green)'
+vimcmd_replace_one_symbol = '[❮](bold fg:lavender)'
+vimcmd_replace_symbol = '[❮](bold fg:lavender)'
+vimcmd_visual_symbol = '[❮](bold fg:yellow)'

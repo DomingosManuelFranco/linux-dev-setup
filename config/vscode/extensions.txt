@@ -1,0 +1,12 @@
+eamodio.gitlens
+esbenp.prettier-vscode
+dbaeumer.vscode-eslint
+ms-azuretools.vscode-docker
+golang.go
+redhat.vscode-yaml
+hashicorp.terraform
+ms-kubernetes-tools.vscode-kubernetes-tools
+github.copilot
+github.copilot-chat
+dart-code.flutter
+dart-code.dart-code

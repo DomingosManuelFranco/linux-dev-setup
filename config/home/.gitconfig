@@ -1,0 +1,21 @@
+[init]
+	defaultBranch = main
+
+[pull]
+	rebase = false
+
+[push]
+	autoSetupRemote = true
+
+[fetch]
+	prune = true
+
+[core]
+	editor = nvim
+	pager = bat
+
+[rebase]
+	autoStash = true
+
+[diff]
+	colorMoved = default

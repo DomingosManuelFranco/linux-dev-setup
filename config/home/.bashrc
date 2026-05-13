@@ -1,0 +1,15 @@
+[[ $- != *i* ]] && return
+
+source "$HOME/.config/dev-setup/shell-common.sh"
+
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init bash)"
+fi
+
+if [[ -f "$HOME/.bash-preexec.sh" ]]; then
+  source "$HOME/.bash-preexec.sh"
+fi
+
+if command -v atuin >/dev/null 2>&1; then
+  eval "$(atuin init bash)"
+fi
