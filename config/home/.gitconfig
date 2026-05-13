@@ -2,7 +2,7 @@
 	defaultBranch = main
 
 [pull]
-	rebase = false
+	rebase = true
 
 [push]
 	autoSetupRemote = true
@@ -12,10 +12,27 @@
 
 [core]
 	editor = nvim
-	pager = bat
+	pager = delta
+	autocrlf = input
 
 [rebase]
 	autoStash = true
 
 [diff]
-	colorMoved = default
+	colorMoved = zebra
+
+[delta]
+	navigate = true
+	side-by-side = true
+	line-numbers = true
+
+[merge]
+	conflictstyle = diff3
+
+[alias]
+	st    = status -sb
+	co    = checkout
+	br    = branch -vv
+	lg    = log --oneline --graph --decorate --all
+	undo  = reset HEAD~1 --mixed
+	wip   = !git add -A && git commit -m 'wip'

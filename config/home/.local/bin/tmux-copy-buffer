@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+# tmux-copy-buffer: write tmux copy-mode selection to the system clipboard.
+# Works with wl-clipboard (Wayland) or xclip/xsel (X11).
+
+set -eu
+
+# Read from stdin (tmux pipes the copied text here)
+content="$(cat)"
+
+if command -v wl-copy >/dev/null 2>&1; then
+  printf '%s' "$content" | wl-copy
+elif command -v xclip >/dev/null 2>&1; then
+  printf '%s' "$content" | xclip -selection clipboard
+elif command -v xsel >/dev/null 2>&1; then
+  printf '%s' "$content" | xsel --clipboard --input
+else
+  # No clipboard tool found — tmux buffer still has the content
+  exit 0
+fi

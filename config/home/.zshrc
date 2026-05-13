@@ -1,7 +1,12 @@
 source "$HOME/.config/dev-setup/shell-common.sh"
 
 autoload -Uz compinit
-compinit
+# Only rebuild completion cache if dump is older than 24 hours (fast startup on re-opens)
+if [[ -n "${ZDOTDIR:-$HOME}/.zcompdump"(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C
+fi
 
 autoload -Uz colors && colors
 autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
@@ -32,11 +37,28 @@ if command -v atuin >/dev/null 2>&1; then
   eval "$(atuin init zsh --disable-up-arrow)"
 fi
 
+# fzf shell integration — probe distro-specific paths in order
 if command -v fzf >/dev/null 2>&1; then
-  source /usr/share/fzf/key-bindings.zsh 2>/dev/null || true
-  source /usr/share/fzf/completion.zsh 2>/dev/null || true
+  _fzf_try_source() {
+    local f
+    for f in \
+      "/usr/share/fzf/${1}" \
+      "/usr/share/fzf/shell/${1}" \
+      "/usr/share/doc/fzf/examples/${1}" \
+      "/opt/homebrew/opt/fzf/shell/${1}"; do
+      if [[ -f "$f" ]]; then
+        source "$f"
+        return 0
+      fi
+    done
+    return 1
+  }
+  _fzf_try_source key-bindings.zsh  2>/dev/null || true
+  _fzf_try_source completion.zsh    2>/dev/null || true
+  unset -f _fzf_try_source
 fi
 
+# fzf-tab — installed by setup script into ~/.config/zsh/plugins/fzf-tab
 if [[ -f "$HOME/.config/zsh/plugins/fzf-tab/fzf-tab.plugin.zsh" ]]; then
   source "$HOME/.config/zsh/plugins/fzf-tab/fzf-tab.plugin.zsh"
 fi

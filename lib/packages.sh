@@ -16,13 +16,18 @@ detect_distro() {
         printf 'pikaos\n'
         return 0
         ;;
+      rhel|centos|almalinux|rocky)
+        printf 'fedora\n'
+        return 0
+        ;;
     esac
 
     case " ${ID_LIKE:-} " in
-      *" ubuntu "*) printf 'ubuntu\n'; return 0 ;;
-      *" debian "*) printf 'debian\n'; return 0 ;;
-      *" arch "*) printf 'arch\n'; return 0 ;;
-      *" suse "*) printf 'opensuse\n'; return 0 ;;
+      *" ubuntu "*)  printf 'ubuntu\n';  return 0 ;;
+      *" debian "*)  printf 'debian\n';  return 0 ;;
+      *" arch "*)    printf 'arch\n';    return 0 ;;
+      *" suse "*)    printf 'opensuse\n'; return 0 ;;
+      *" rhel "*|*" fedora "*|*" centos "*) printf 'fedora\n'; return 0 ;;
     esac
   fi
 
@@ -49,7 +54,6 @@ fd
 fzf
 ripgrep
 jq
-yq
 zoxide
 fastfetch
 btop
@@ -84,8 +88,6 @@ EOF
       ;;
     web)
       cat <<'EOF'
-nodejs
-npm
 httpie
 sqlite
 postgresql-client
@@ -159,7 +161,6 @@ map_package() {
     arch:fzf) echo fzf ;;
     arch:ripgrep) echo ripgrep ;;
     arch:jq) echo jq ;;
-    arch:yq) echo yq ;;
     arch:zoxide) echo zoxide ;;
     arch:fastfetch) echo fastfetch ;;
     arch:btop) echo btop ;;
@@ -187,13 +188,11 @@ map_package() {
     arch:python-neovim) echo python-neovim ;;
     arch:ruby) echo ruby ;;
     arch:atuin) echo atuin ;;
-    arch:nodejs) echo nodejs-lts ;;
-    arch:npm) echo npm ;;
     arch:httpie) echo httpie ;;
     arch:sqlite) echo sqlite ;;
-    arch:postgresql-client) echo postgresql ;;
+    arch:postgresql-client) echo postgresql-libs ;;
     arch:mysql-client) echo mariadb-clients ;;
-    arch:redis-tools) echo redis ;;
+    arch:redis-tools) echo redis ;;  # Arch ships redis as a single package; the CLI (redis-cli) is included
     arch:mongosh) return 1 ;;  # installed via vendor step (mongosh binary)
     arch:mkcert) echo mkcert ;;
     arch:android-tools) echo android-tools ;;
@@ -238,7 +237,6 @@ map_package() {
     fedora:fzf) echo fzf ;;
     fedora:ripgrep) echo ripgrep ;;
     fedora:jq) echo jq ;;
-    fedora:yq) echo yq ;;
     fedora:zoxide) echo zoxide ;;
     fedora:fastfetch) echo fastfetch ;;
     fedora:btop) echo btop ;;
@@ -266,11 +264,9 @@ map_package() {
     fedora:python-neovim) echo python3-neovim ;;
     fedora:ruby) echo ruby ;;
     fedora:atuin) echo atuin ;;
-    fedora:nodejs) echo nodejs ;;
-    fedora:npm) echo npm ;;
     fedora:httpie) echo httpie ;;
     fedora:sqlite) echo sqlite ;;
-    fedora:postgresql-client) echo postgresql ;;
+    fedora:postgresql-client) echo postgresql ;;  # fedora has no separate client package; psql is in postgresql
     fedora:mysql-client) echo community-mysql ;;
     fedora:redis-tools) echo redis ;;
     fedora:mongosh) return 1 ;;  # installed via vendor step
@@ -280,7 +276,7 @@ map_package() {
     fedora:scrcpy) echo scrcpy ;;
     fedora:jdk21) echo java-21-openjdk ;;
     fedora:docker) echo moby-engine ;;
-    fedora:docker-compose) echo docker-compose ;;
+    fedora:docker-compose) echo docker-compose-plugin ;;  # v2 plugin; legacy v1 'docker-compose' is deprecated
     fedora:docker-buildx) echo docker-buildx-plugin ;;
     fedora:podman) echo podman ;;
     fedora:podman-docker) echo podman-docker ;;
@@ -317,7 +313,6 @@ map_package() {
     ubuntu:fzf|debian:fzf|pikaos:fzf) echo fzf ;;
     ubuntu:ripgrep|debian:ripgrep|pikaos:ripgrep) echo ripgrep ;;
     ubuntu:jq|debian:jq|pikaos:jq) echo jq ;;
-    ubuntu:yq|debian:yq|pikaos:yq) echo yq ;;
     ubuntu:zoxide|debian:zoxide|pikaos:zoxide) echo zoxide ;;
     ubuntu:fastfetch|debian:fastfetch|pikaos:fastfetch) echo fastfetch ;;
     ubuntu:btop|debian:btop|pikaos:btop) echo btop ;;
@@ -345,8 +340,6 @@ map_package() {
     ubuntu:python-neovim|debian:python-neovim|pikaos:python-neovim) echo python3-neovim ;;
     ubuntu:ruby|debian:ruby|pikaos:ruby) echo ruby ;;
     ubuntu:atuin|debian:atuin|pikaos:atuin) echo atuin ;;
-    ubuntu:nodejs|debian:nodejs|pikaos:nodejs) echo nodejs ;;
-    ubuntu:npm|debian:npm|pikaos:npm) echo npm ;;
     ubuntu:httpie|debian:httpie|pikaos:httpie) echo httpie ;;
     ubuntu:sqlite|debian:sqlite|pikaos:sqlite) echo sqlite3 ;;
     ubuntu:postgresql-client|debian:postgresql-client|pikaos:postgresql-client) echo postgresql-client ;;
@@ -396,15 +389,14 @@ map_package() {
     opensuse:fzf) echo fzf ;;
     opensuse:ripgrep) echo ripgrep ;;
     opensuse:jq) echo jq ;;
-    opensuse:yq) echo yq ;;
     opensuse:zoxide) echo zoxide ;;
     opensuse:fastfetch) echo fastfetch ;;
     opensuse:btop) echo btop ;;
     opensuse:starship) echo starship ;;
     opensuse:direnv) echo direnv ;;
     opensuse:gh) echo gh ;;
-    opensuse:python3) echo python311 ;;
-    opensuse:pipx) echo python311-pipx ;;
+    opensuse:python3) echo python3 ;;
+    opensuse:pipx) echo python3-pipx ;;
     opensuse:openssh) echo openssh-clients ;;
     opensuse:gnupg) echo gpg2 ;;
     opensuse:rsync) echo rsync ;;
@@ -424,8 +416,6 @@ map_package() {
     opensuse:python-neovim) echo python3-neovim ;;
     opensuse:ruby) echo ruby ;;
     opensuse:atuin) echo atuin ;;
-    opensuse:nodejs) echo nodejs-default ;;
-    opensuse:npm) echo npm-default ;;
     opensuse:httpie) echo httpie ;;
     opensuse:sqlite) echo sqlite3 ;;
     opensuse:postgresql-client) echo postgresql ;;

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# tmux-cheatsheet: display a popup cheatsheet of custom tmux keybindings.
+
+cat <<'EOF'
+╔══════════════════════════════════════════════════════════╗
+║              tmux keybindings (prefix = C-a)             ║
+╠══════════════════════════════════════════════════════════╣
+║  Sessions                                                ║
+║   f    → tmux-sessionizer (fuzzy project switcher)       ║
+║   ?    → this cheatsheet                                 ║
+║   $    → rename session                                  ║
+║   s    → list sessions                                   ║
+║   d    → detach                                          ║
+╠══════════════════════════════════════════════════════════╣
+║  Windows                                                 ║
+║   c    → new window                                      ║
+║   ,    → rename window                                   ║
+║   n/p  → next/prev window                                ║
+║   &    → kill window                                     ║
+╠══════════════════════════════════════════════════════════╣
+║  Panes                                                   ║
+║   |    → split horizontal                                ║
+║   -    → split vertical                                  ║
+║   h/j/k/l → navigate panes (vim keys)                   ║
+║   H/J/K/L → resize panes                                ║
+║   z    → zoom/unzoom pane                                ║
+║   x    → kill pane                                       ║
+╠══════════════════════════════════════════════════════════╣
+║  Copy mode (vi)                                          ║
+║   [    → enter copy mode                                 ║
+║   v    → begin selection                                 ║
+║   y    → copy selection                                  ║
+║   ]    → paste                                           ║
+╚══════════════════════════════════════════════════════════╝
+EOF

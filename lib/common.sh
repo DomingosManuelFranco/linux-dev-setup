@@ -100,11 +100,14 @@ setup_corepack() {
 
 setup_pipx() {
   pipx ensurepath >/dev/null 2>&1 || true
-  pipx install --force poetry >/dev/null 2>&1 || true
-  pipx install --force checkov >/dev/null 2>&1 || true
+  # Only install if not already present — avoid reinstalling on every run
+  pipx list 2>/dev/null | grep -q 'poetry' || pipx install poetry >/dev/null 2>&1 || warn "poetry install via pipx failed"
+  pipx list 2>/dev/null | grep -q 'checkov' || pipx install checkov >/dev/null 2>&1 || warn "checkov install via pipx failed"
   # fastlane requires Ruby; install only if gem is available
   if have gem; then
-    gem install fastlane --user-install >/dev/null 2>&1 || warn "fastlane gem install failed; ensure Ruby >= 2.7 is available"
+    if ! gem list --installed fastlane >/dev/null 2>&1; then
+      gem install fastlane --user-install >/dev/null 2>&1 || warn "fastlane gem install failed; ensure Ruby >= 2.7 is available"
+    fi
   else
     warn "gem not found; skipping fastlane — install Ruby then run: gem install fastlane"
   fi
@@ -116,7 +119,14 @@ setup_rust() {
     # shellcheck source=/dev/null
     . "$HOME/.cargo/env"
   fi
-  rustup default stable >/dev/null 2>&1 || true
+  # Only set default to stable if no toolchain is active yet (preserve nightly/beta setups)
+  if have rustup; then
+    local active
+    active="$(rustup show active-toolchain 2>/dev/null | awk '{print $1}' || true)"
+    if [[ -z "$active" || "$active" == "error"* ]]; then
+      rustup default stable >/dev/null 2>&1 || warn "rustup default stable failed"
+    fi
+  fi
 }
 
 install_vscode_extensions() {
@@ -270,10 +280,10 @@ setup_github() {
     hostname="$(hostname -s 2>/dev/null || printf 'linux')"
     key_title="$hostname-ed25519"
 
-    # Check if this exact public key is already uploaded
-    local pub_key
-    pub_key="$(cat "${ssh_key}.pub")"
-    if gh ssh-key list 2>/dev/null | grep -qF "${pub_key%% *}"; then
+    # Check if this exact public key blob is already uploaded (compare base64 field, not just the type)
+    local pub_blob
+    pub_blob="$(awk '{print $2}' "${ssh_key}.pub")"
+    if gh ssh-key list 2>/dev/null | grep -qF "$pub_blob"; then
       log "SSH public key already on GitHub; skipping upload"
     else
       gh ssh-key add "${ssh_key}.pub" --title "$key_title" \
@@ -282,13 +292,60 @@ setup_github() {
     fi
   fi
 
-  # Ensure SSH agent knows about the key
+  # Ensure SSH agent knows about the key — reuse existing agent, don't spawn a new one
   if [[ -f "$ssh_key" ]]; then
-    eval "$(ssh-agent -s)" >/dev/null 2>&1 || true
+    if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+      # No agent running in this session; start one and export the vars
+      eval "$(ssh-agent -s)" 2>/dev/null || true
+    fi
     ssh-add "$ssh_key" >/dev/null 2>&1 || true
   fi
 
   log "GitHub setup complete"
+}
+
+setup_browser_mime() {
+  # Detect which browser is installed and register it as the default for web MIME types.
+  # Runs after link_dotfiles so ~/.config/mimeapps.list already exists as a symlink.
+  local browser_desktop=""
+  local -A candidates=(
+    [google-chrome-stable]=google-chrome.desktop
+    [google-chrome]=google-chrome.desktop
+    [chromium-browser]=chromium-browser.desktop
+    [chromium]=chromium.desktop
+    [firefox]=firefox.desktop
+    [brave-browser]=brave-browser.desktop
+  )
+
+  for bin in google-chrome-stable google-chrome chromium-browser chromium firefox brave-browser; do
+    if have "$bin"; then
+      browser_desktop="${candidates[$bin]}"
+      break
+    fi
+  done
+
+  if [[ -z "$browser_desktop" ]]; then
+    log "No known browser found; skipping web MIME defaults"
+    return 0
+  fi
+
+  local mimeapps="$HOME/.config/mimeapps.list"
+  if [[ ! -f "$mimeapps" ]]; then
+    mkdir -p "$HOME/.config"
+    printf '[Default Applications]\n' > "$mimeapps"
+  fi
+
+  # Update or add each MIME type — sed-in-place approach
+  local -a mime_types=(text/html x-scheme-handler/http x-scheme-handler/https x-scheme-handler/about x-scheme-handler/unknown)
+  for mime in "${mime_types[@]}"; do
+    if grep -q "^${mime}=" "$mimeapps" 2>/dev/null; then
+      sed -i "s|^${mime}=.*|${mime}=${browser_desktop}|" "$mimeapps"
+    else
+      printf '%s=%s\n' "$mime" "$browser_desktop" >> "$mimeapps"
+    fi
+  done
+
+  log "Set default browser MIME types to $browser_desktop"
 }
 
 install_npm_globals() {

@@ -16,7 +16,7 @@ INSTALL_OPTIONAL=0
 INSTALL_VENDOR=1
 SETUP_GIT=1
 SETUP_GITHUB=1
-ROLES=(base web mobile devops)
+ROLES=(base)
 
 detect_desktop() {
   local current_desktop session_desktop session
@@ -47,7 +47,7 @@ parse_roles() {
   IFS=',' read -r -a raw <<< "$role_csv"
   for role in "${raw[@]}"; do
     case "$role" in
-      base|web|mobile|devops)
+    base|web|mobile|devops)
         parsed+=("$role")
         ;;
       *)
@@ -149,7 +149,8 @@ while [[ $# -gt 0 ]]; do
 Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor] [--no-git] [--no-github]
 
   --desktop    apply optional desktop-specific settings
-  --roles      comma-separated install roles; defaults to base,web,mobile,devops
+  --roles      comma-separated install roles; default is 'base' only
+               use --roles base,web,mobile,devops to install everything
   --optional   also attempt GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop
   --no-vendor  skip vendor bootstraps like mise, Flutter SDK, and Android SDK components
   --no-git     skip interactive git user configuration
@@ -173,8 +174,14 @@ if [[ -z "$DESKTOP" ]] && detected_desktop="$(detect_desktop 2>/dev/null)"; then
   DESKTOP="$detected_desktop"
 fi
 
+# Tee all output to a log file for post-mortem debugging
+LOG_FILE="$HOME/.local/share/dev-setup-portable/install-$(date +%Y%m%d-%H%M%S).log"
+mkdir -p "$(dirname "$LOG_FILE")"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 log "Detected distro: $distro"
 log "Selected roles: ${ROLES[*]}"
+log "Log file: $LOG_FILE"
 if [[ -n "$DESKTOP" ]]; then
   log "Detected desktop profile: $DESKTOP"
 fi
@@ -276,9 +283,12 @@ esac
 
 link_dotfiles
 render_templates
+setup_browser_mime
 bootstrap_selected_vendors
 setup_corepack
 setup_pipx
+# gext must be installed after pipx ensurepath so it lands on PATH
+install_gext
 setup_rust
 install_npm_globals
 install_vscode_extensions

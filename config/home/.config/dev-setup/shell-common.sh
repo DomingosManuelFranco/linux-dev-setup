@@ -1,16 +1,42 @@
 #!/usr/bin/env bash
 
-export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/go/bin:$PATH"
-export PATH="$HOME/.local/share/mise/shims:$HOME/.local/share/mise/bin:$PATH"
+# Helper: add a directory to PATH only if not already present
+_prepend_path() {
+  local dir="$1"
+  [[ -d "$dir" ]] || return 0
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) export PATH="$dir:$PATH" ;;
+  esac
+}
 
-if [[ -d "$HOME/.atuin/bin" ]]; then
-  export PATH="$HOME/.atuin/bin:$PATH"
-fi
+_prepend_path "$HOME/.opencode/bin"
+_prepend_path "$HOME/.local/bin"
+_prepend_path "$HOME/go/bin"
+_prepend_path "$HOME/.local/share/mise/shims"
+_prepend_path "$HOME/.local/share/mise/bin"
+_prepend_path "$HOME/.atuin/bin"
+_prepend_path "$HOME/.cargo/bin"
+_prepend_path "$HOME/.local/share/pnpm"
+_prepend_path "$HOME/.local/share/flutter/bin"
+_prepend_path "$HOME/Android/Sdk/platform-tools"
+_prepend_path "$HOME/Android/Sdk/cmdline-tools/latest/bin"
+_prepend_path "$HOME/Android/Sdk/emulator"
 
 export EDITOR="nvim"
 export VISUAL="nvim"
 export TERMINAL="kitty"
-export BROWSER="google-chrome-stable"
+
+# Detect an installed browser rather than hardcoding one
+if [[ -z "${BROWSER:-}" ]]; then
+  for _b in google-chrome-stable google-chrome chromium-browser chromium firefox brave-browser; do
+    if command -v "$_b" >/dev/null 2>&1; then
+      export BROWSER="$_b"
+      break
+    fi
+  done
+  unset _b
+fi
 
 export GOPATH="$HOME/go"
 export CARGO_HOME="$HOME/.cargo"
@@ -18,7 +44,6 @@ export PNPM_HOME="$HOME/.local/share/pnpm"
 export NPM_CONFIG_PREFIX="$HOME/.local"
 export ANDROID_HOME="$HOME/Android/Sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
-export PATH="$PNPM_HOME:$CARGO_HOME/bin:$HOME/.local/bin:$HOME/.local/share/flutter/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
 
 export HISTFILE="$HOME/.local/state/shell/history"
 export HISTSIZE=100000
@@ -112,7 +137,8 @@ export FZF_DEFAULT_OPTS='--height=45% --layout=reverse --border=rounded --previe
 export FZF_CTRL_T_OPTS='--preview "bat --style=plain --color=always --line-range=:200 {}"'
 export FZF_ALT_C_OPTS='--preview "eza --tree --level=2 --icons=auto --color=always {} | head -200"'
 
-mkdir -p "$HOME/.local/state/shell"
+# Create shell state dir once — skip if already present
+[[ -d "$HOME/.local/state/shell" ]] || mkdir -p "$HOME/.local/state/shell"
 
 if command -v starship >/dev/null 2>&1; then
   if [[ -n "${ZSH_VERSION:-}" ]]; then

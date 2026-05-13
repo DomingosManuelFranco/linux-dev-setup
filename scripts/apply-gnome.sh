@@ -61,18 +61,32 @@ gsettings set org.gnome.desktop.interface color-scheme prefer-dark || true
 gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 11' || true
 
 # Set default terminal: GNOME 42+ removed the old key; use xdg-mime and update-alternatives
-if command -v update-alternatives >/dev/null 2>&1; then
-  update-alternatives --set x-terminal-emulator "$(command -v kitty)" >/dev/null 2>&1 || true
+if command -v kitty >/dev/null 2>&1; then
+  if command -v update-alternatives >/dev/null 2>&1; then
+    update-alternatives --set x-terminal-emulator "$(command -v kitty)" >/dev/null 2>&1 || true
+  fi
+  if command -v xdg-mime >/dev/null 2>&1; then
+    xdg-mime default kitty.desktop x-scheme-handler/terminal >/dev/null 2>&1 || true
+  fi
+  # Also set the GNOME 40-41 key as a best-effort fallback (silently fails on 42+)
+  gsettings set org.gnome.desktop.default-applications.terminal exec 'kitty' 2>/dev/null || true
+else
+  warn "kitty not found; skipping default terminal configuration"
 fi
-if command -v xdg-mime >/dev/null 2>&1; then
-  xdg-mime default kitty.desktop x-scheme-handler/terminal >/dev/null 2>&1 || true
-fi
-# Also set the GNOME 40-41 key as a best-effort fallback (silently fails on 42+)
-gsettings set org.gnome.desktop.default-applications.terminal exec 'kitty' 2>/dev/null || true
 
 # Build a dynamic favorites list based on what is actually installed
 build_favorites() {
-  local -a favs=('org.gnome.Nautilus.desktop')
+  local -a favs=()
+
+  # Detect Nautilus .desktop name (differs across distros)
+  local nautilus_desktop=""
+  for _f in org.gnome.Nautilus.desktop nautilus.desktop; do
+    if [[ -f "/usr/share/applications/$_f" ]] || [[ -f "$HOME/.local/share/applications/$_f" ]]; then
+      nautilus_desktop="$_f"
+      break
+    fi
+  done
+  [[ -n "$nautilus_desktop" ]] && favs+=("$nautilus_desktop")
 
   command -v kitty >/dev/null 2>&1 && favs+=('kitty.desktop')
 

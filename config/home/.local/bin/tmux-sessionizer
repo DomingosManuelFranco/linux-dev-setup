@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# tmux-sessionizer: fuzzy-find a project directory and switch/create a tmux session for it.
+# Searches ~/Projects, ~/Work, ~/Code, and ~ (depth 2) by default.
+# Override with SESSIONIZER_DIRS (colon-separated list of directories).
+
+set -euo pipefail
+
+_search_dirs() {
+  IFS=':' read -r -a dirs <<< "${SESSIONIZER_DIRS:-$HOME/Projects:$HOME/Work:$HOME/Code:$HOME}"
+  for dir in "${dirs[@]}"; do
+    [[ -d "$dir" ]] && printf '%s\n' "$dir"
+  done
+}
+
+_find_projects() {
+  local -a roots=()
+  while IFS= read -r d; do roots+=("$d"); done < <(_search_dirs)
+
+  find "${roots[@]}" -mindepth 1 -maxdepth 2 -type d \( -name '.git' -prune -o -print \) 2>/dev/null \
+    | grep -v '/\.' \
+    | sort -u
+}
+
+if [[ $# -eq 1 ]]; then
+  selected="$1"
+else
+  selected="$(
+    _find_projects \
+      | fzf --height=50% --layout=reverse --border=rounded \
+            --prompt='  session> ' \
+            --preview 'eza --tree --level=2 --icons=auto --color=always {} 2>/dev/null | head -40' \
+            --preview-window=right:40%:border-left
+  )"
+fi
+
+[[ -z "$selected" ]] && exit 0
+
+# Derive a safe session name from the directory path
+session_name="$(basename "$selected" | tr '.' '_')"
+
+if [[ -z "${TMUX:-}" ]]; then
+  # Not inside tmux — create or attach
+  tmux new-session -A -s "$session_name" -c "$selected"
+else
+  # Inside tmux — switch or create
+  if ! tmux has-session -t "$session_name" 2>/dev/null; then
+    tmux new-session -ds "$session_name" -c "$selected"
+  fi
+  tmux switch-client -t "$session_name"
+fi
