@@ -115,9 +115,11 @@ export FZF_ALT_C_OPTS='--preview "eza --tree --level=2 --icons=auto --color=alwa
 mkdir -p "$HOME/.local/state/shell"
 
 if command -v starship >/dev/null 2>&1; then
-  case "${ZSH_VERSION:-}${BASH_VERSION:-}" in
-    *zsh*) eval "$(starship init zsh)" ;;
-  esac
+  if [[ -n "${ZSH_VERSION:-}" ]]; then
+    eval "$(starship init zsh)"
+  elif [[ -n "${BASH_VERSION:-}" ]]; then
+    eval "$(starship init bash)"
+  fi
 fi
 
 if [[ -f "$HOME/.atuin/bin/env" ]]; then

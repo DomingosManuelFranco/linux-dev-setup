@@ -92,6 +92,12 @@ collect_packages() {
     done < <(resolve_packages "$distro" gui)
   fi
 
+  if [[ "${DESKTOP:-}" == "gnome" ]]; then
+    while IFS= read -r package; do
+      [[ -n "$package" ]] && selected+=("$package")
+    done < <(resolve_packages "$distro" gnome)
+  fi
+
   dedupe_packages "${selected[@]}"
 }
 

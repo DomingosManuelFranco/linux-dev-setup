@@ -4,6 +4,7 @@ MISE_INSTALL_PATH="$HOME/.local/bin"
 FLUTTER_ROOT="$HOME/.local/share/flutter"
 ANDROID_SDK_ROOT_DEFAULT="$HOME/Android/Sdk"
 ANDROID_CMDLINE_TOOLS_VERSION="11076708"
+VENDOR_TMP_DIR="${XDG_RUNTIME_DIR:-/tmp}/dev-setup-vendor"
 
 download_release_asset() {
   local url="$1"
@@ -16,12 +17,12 @@ install_binary_from_tarball() {
   local name="$1"
   local url="$2"
   local binary_path_in_archive="$3"
-  local archive="/tmp/opencode/${name}.tar.gz"
-  local extract_dir="/tmp/opencode/${name}-extract"
+  local archive="$VENDOR_TMP_DIR/${name}.tar.gz"
+  local extract_dir="$VENDOR_TMP_DIR/${name}-extract"
 
   log "Installing $name"
   rm -rf "$extract_dir"
-  mkdir -p "$HOME/.local/bin" "$extract_dir"
+  mkdir -p "$HOME/.local/bin" "$extract_dir" "$VENDOR_TMP_DIR"
   download_release_asset "$url" "$archive"
   tar -xzf "$archive" -C "$extract_dir"
   install -m 0755 "$extract_dir/$binary_path_in_archive" "$HOME/.local/bin/$name"
@@ -31,12 +32,12 @@ install_binary_from_zip() {
   local name="$1"
   local url="$2"
   local binary_path_in_archive="$3"
-  local archive="/tmp/opencode/${name}.zip"
-  local extract_dir="/tmp/opencode/${name}-extract"
+  local archive="$VENDOR_TMP_DIR/${name}.zip"
+  local extract_dir="$VENDOR_TMP_DIR/${name}-extract"
 
   log "Installing $name"
   rm -rf "$extract_dir"
-  mkdir -p "$HOME/.local/bin" "$extract_dir"
+  mkdir -p "$HOME/.local/bin" "$extract_dir" "$VENDOR_TMP_DIR"
   download_release_asset "$url" "$archive"
   unzip -qo "$archive" -d "$extract_dir"
   install -m 0755 "$extract_dir/$binary_path_in_archive" "$HOME/.local/bin/$name"
@@ -91,7 +92,7 @@ install_android_cmdline_tools() {
   local android_home="${ANDROID_HOME:-$ANDROID_SDK_ROOT_DEFAULT}"
   local tools_root="$android_home/cmdline-tools"
   local latest_root="$tools_root/latest"
-  local archive="/tmp/opencode/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}.zip"
+  local archive="$VENDOR_TMP_DIR/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}.zip"
   local sdkmanager_bin="$latest_root/bin/sdkmanager"
 
   mkdir -p "$tools_root"
@@ -117,22 +118,15 @@ install_android_cmdline_tools() {
   fi
 }
 
-bootstrap_role_vendors() {
-  case "$1" in
-    web|devops)
-      install_mise_toolchains
-      ;;
-    mobile)
-      install_mise_toolchains
-      install_flutter_sdk
-      install_android_cmdline_tools
-      ;;
-  esac
-}
-
 bootstrap_optional_vendors() {
   if have flatpak; then
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1 || true
+  fi
+
+  # Install gnome-extensions-cli (gext) via pipx so the CLI matches what apply-gnome.sh expects
+  if ! have gext; then
+    log "Installing gext (gnome-extensions-cli)"
+    pipx install gnome-extensions-cli >/dev/null 2>&1 || warn "Failed to install gext via pipx; GNOME extensions may need manual install"
   fi
 }
 
@@ -152,16 +146,31 @@ install_stern() {
 
 install_trivy() {
   have trivy && return 0
-  install_binary_from_tarball trivy \
-    "https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz" \
-    "trivy"
+  local archive="$VENDOR_TMP_DIR/trivy.tar.gz"
+  local extract_dir="$VENDOR_TMP_DIR/trivy-extract"
+  log "Installing trivy"
+  rm -rf "$extract_dir"
+  mkdir -p "$HOME/.local/bin" "$extract_dir" "$VENDOR_TMP_DIR"
+  download_release_asset "https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz" "$archive"
+  tar -xzf "$archive" -C "$extract_dir"
+  # Binary may be at root or inside a versioned subdirectory
+  local trivy_bin
+  trivy_bin="$(find "$extract_dir" -maxdepth 2 -name 'trivy' -type f | head -1)"
+  if [[ -z "$trivy_bin" ]]; then
+    warn "trivy binary not found in archive"
+    return 1
+  fi
+  install -m 0755 "$trivy_bin" "$HOME/.local/bin/trivy"
 }
 
 install_sops() {
   have sops && return 0
   log "Installing sops"
   mkdir -p "$HOME/.local/bin"
-  download_release_asset "https://github.com/getsops/sops/releases/latest/download/sops-v3.9.0.linux.amd64" "$HOME/.local/bin/sops"
+  local latest_url
+  latest_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/getsops/sops/releases/latest")"
+  local version="${latest_url##*/}"
+  download_release_asset "https://github.com/getsops/sops/releases/download/${version}/sops-${version}.linux.amd64" "$HOME/.local/bin/sops"
   chmod 0755 "$HOME/.local/bin/sops"
 }
 
@@ -214,16 +223,34 @@ install_minikube() {
 
 install_web_vendor_tools() {
   install_mise_toolchains
+  install_uv_if_missing
+  install_rustup_if_missing
+}
+
+install_uv_if_missing() {
+  have uv && return 0
+  log "Installing uv"
+  curl -fsSL https://astral.sh/uv/install.sh | sh >/dev/null 2>&1 || warn "uv install failed"
+}
+
+install_rustup_if_missing() {
+  have rustup && return 0
+  log "Installing rustup"
+  curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path >/dev/null 2>&1 || warn "rustup install failed"
 }
 
 install_mobile_vendor_tools() {
   install_mise_toolchains
+  install_uv_if_missing
+  install_rustup_if_missing
   install_flutter_sdk
   install_android_cmdline_tools
 }
 
 install_devops_vendor_tools() {
   install_mise_toolchains
+  install_uv_if_missing
+  install_rustup_if_missing
   install_terragrunt
   install_stern
   install_trivy
@@ -233,6 +260,25 @@ install_devops_vendor_tools() {
   install_k9s
   install_kubectx_tools
   install_minikube
+  install_google_cloud_cli
+}
+
+install_google_cloud_cli() {
+  have gcloud && return 0
+  log "Installing Google Cloud CLI"
+  local archive="$VENDOR_TMP_DIR/google-cloud-cli.tar.gz"
+  local install_dir="$HOME/.local/share/google-cloud-sdk"
+  mkdir -p "$VENDOR_TMP_DIR"
+  download_release_asset \
+    "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz" \
+    "$archive"
+  rm -rf "$install_dir"
+  tar -xzf "$archive" -C "$HOME/.local/share"
+  mv "$HOME/.local/share/google-cloud-sdk" "$install_dir" 2>/dev/null || true
+  "$install_dir/install.sh" --quiet --path-update=false --bash-completion=false >/dev/null 2>&1 || warn "gcloud install script failed"
+  ln -sfn "$install_dir/bin/gcloud" "$HOME/.local/bin/gcloud"
+  ln -sfn "$install_dir/bin/gsutil" "$HOME/.local/bin/gsutil"
+  ln -sfn "$install_dir/bin/bq" "$HOME/.local/bin/bq"
 }
 
 bootstrap_role_vendors() {

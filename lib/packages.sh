@@ -58,6 +58,7 @@ direnv
 gh
 python3
 pipx
+uv
 openssh
 gnupg
 rsync
@@ -70,6 +71,13 @@ font-jetbrains-mono-nerd
 lazygit
 kitty
 alacritty
+rustup
+python-neovim
+EOF
+      ;;
+    gnome)
+      cat <<'EOF'
+gnome-shell-extension-manager
 EOF
       ;;
     web)
@@ -95,6 +103,7 @@ EOF
       cat <<'EOF'
 docker
 docker-compose
+docker-buildx
 podman
 podman-docker
 kubectl
@@ -164,7 +173,12 @@ map_package() {
     arch:lazygit) echo lazygit ;;
     arch:kitty) echo kitty ;;
     arch:alacritty) echo alacritty ;;
-    arch:nodejs) echo nodejs-lts-jod ;;
+    arch:gnome-shell-extension-manager) echo gnome-shell-extension-manager ;;
+    arch:gext) return 1 ;;
+    arch:rustup) echo rustup ;;
+    arch:uv) echo uv ;;
+    arch:python-neovim) echo python-neovim ;;
+    arch:nodejs) echo nodejs-lts ;;
     arch:npm) echo npm ;;
     arch:httpie) echo httpie ;;
     arch:sqlite) echo sqlite ;;
@@ -177,6 +191,7 @@ map_package() {
     arch:jdk21) echo jdk21-openjdk ;;
     arch:docker) echo docker ;;
     arch:docker-compose) echo docker-compose ;;
+    arch:docker-buildx) echo docker-buildx ;;
     arch:podman) echo podman ;;
     arch:podman-docker) echo podman-docker ;;
     arch:kubectl) echo kubectl ;;
@@ -230,6 +245,11 @@ map_package() {
     fedora:lazygit) echo lazygit ;;
     fedora:kitty) echo kitty ;;
     fedora:alacritty) echo alacritty ;;
+    fedora:gnome-shell-extension-manager) echo gnome-extensions-app ;;
+    fedora:gext) return 1 ;;
+    fedora:rustup) echo rustup ;;
+    fedora:uv) echo uv ;;
+    fedora:python-neovim) echo python3-neovim ;;
     fedora:nodejs) echo nodejs ;;
     fedora:npm) echo npm ;;
     fedora:httpie) echo httpie ;;
@@ -243,6 +263,7 @@ map_package() {
     fedora:jdk21) echo java-21-openjdk ;;
     fedora:docker) echo moby-engine ;;
     fedora:docker-compose) echo docker-compose ;;
+    fedora:docker-buildx) echo docker-buildx-plugin ;;
     fedora:podman) echo podman ;;
     fedora:podman-docker) echo podman-docker ;;
     fedora:kubectl) echo kubernetes-client ;;
@@ -296,6 +317,11 @@ map_package() {
     ubuntu:lazygit|debian:lazygit|pikaos:lazygit) echo lazygit ;;
     ubuntu:kitty|debian:kitty|pikaos:kitty) echo kitty ;;
     ubuntu:alacritty|debian:alacritty|pikaos:alacritty) echo alacritty ;;
+    ubuntu:gnome-shell-extension-manager|debian:gnome-shell-extension-manager|pikaos:gnome-shell-extension-manager) echo gnome-shell-extension-manager ;;
+    ubuntu:gext|debian:gext|pikaos:gext) return 1 ;;
+    ubuntu:rustup|debian:rustup|pikaos:rustup) return 1 ;;
+    ubuntu:uv|debian:uv|pikaos:uv) return 1 ;;
+    ubuntu:python-neovim|debian:python-neovim|pikaos:python-neovim) echo python3-neovim ;;
     ubuntu:nodejs|debian:nodejs|pikaos:nodejs) echo nodejs ;;
     ubuntu:npm|debian:npm|pikaos:npm) echo npm ;;
     ubuntu:httpie|debian:httpie|pikaos:httpie) echo httpie ;;
@@ -309,21 +335,22 @@ map_package() {
     ubuntu:jdk21|debian:jdk21|pikaos:jdk21) echo openjdk-21-jdk ;;
     ubuntu:docker|debian:docker|pikaos:docker) echo docker.io ;;
     ubuntu:docker-compose|debian:docker-compose|pikaos:docker-compose) echo docker-compose-v2 ;;
+    ubuntu:docker-buildx|debian:docker-buildx|pikaos:docker-buildx) echo docker-buildx-plugin ;;
     ubuntu:podman|debian:podman|pikaos:podman) echo podman ;;
     ubuntu:podman-docker|debian:podman-docker|pikaos:podman-docker) echo podman-docker ;;
     ubuntu:kubectl|debian:kubectl|pikaos:kubectl) echo kubectl ;;
     ubuntu:helm|debian:helm|pikaos:helm) echo helm ;;
-    ubuntu:kustomize|debian:kustomize|pikaos:kustomize) return 1 ;;
+    ubuntu:kustomize|debian:kustomize|pikaos:kustomize) printf '[dev-setup] warning: kustomize not in apt repos; install manually or via vendor binary\n' >&2; return 1 ;;
     ubuntu:terraform|debian:terraform|pikaos:terraform) echo terraform ;;
     ubuntu:ansible|debian:ansible|pikaos:ansible) echo ansible ;;
     ubuntu:packer|debian:packer|pikaos:packer) echo packer ;;
     ubuntu:aws-cli|debian:aws-cli|pikaos:aws-cli) echo awscli ;;
     ubuntu:azure-cli|debian:azure-cli|pikaos:azure-cli) echo azure-cli ;;
     ubuntu:age|debian:age|pikaos:age) echo age ;;
-    ubuntu:code|debian:code|pikaos:code) return 1 ;;
-    ubuntu:google-chrome|debian:google-chrome|pikaos:google-chrome) return 1 ;;
-    ubuntu:podman-desktop|debian:podman-desktop|pikaos:podman-desktop) return 1 ;;
-    ubuntu:android-studio|debian:android-studio|pikaos:android-studio) return 1 ;;
+    ubuntu:code|debian:code|pikaos:code) printf '[dev-setup] warning: VS Code (code) not in apt repos; add Microsoft repo or install manually\n' >&2; return 1 ;;
+    ubuntu:google-chrome|debian:google-chrome|pikaos:google-chrome) printf '[dev-setup] warning: Google Chrome not in apt repos; add Google repo or install manually\n' >&2; return 1 ;;
+    ubuntu:podman-desktop|debian:podman-desktop|pikaos:podman-desktop) printf '[dev-setup] warning: Podman Desktop not in apt repos; install from https://podman-desktop.io manually\n' >&2; return 1 ;;
+    ubuntu:android-studio|debian:android-studio|pikaos:android-studio) printf '[dev-setup] warning: Android Studio not in apt repos; install from https://developer.android.com manually\n' >&2; return 1 ;;
 
     opensuse:bash) echo bash ;;
     opensuse:zsh) echo zsh ;;
@@ -362,8 +389,13 @@ map_package() {
     opensuse:lazygit) echo lazygit ;;
     opensuse:kitty) echo kitty ;;
     opensuse:alacritty) echo alacritty ;;
-    opensuse:nodejs) echo nodejs20 ;;
-    opensuse:npm) echo npm20 ;;
+    opensuse:gnome-shell-extension-manager) echo gnome-shell-extension-manager ;;
+    opensuse:gext) return 1 ;;
+    opensuse:rustup) echo rustup ;;
+    opensuse:uv) return 1 ;;
+    opensuse:python-neovim) echo python3-neovim ;;
+    opensuse:nodejs) echo nodejs-default ;;
+    opensuse:npm) echo npm-default ;;
     opensuse:httpie) echo httpie ;;
     opensuse:sqlite) echo sqlite3 ;;
     opensuse:postgresql-client) echo postgresql ;;
@@ -375,6 +407,7 @@ map_package() {
     opensuse:jdk21) echo java-21-openjdk ;;
     opensuse:docker) echo docker ;;
     opensuse:docker-compose) echo docker-compose-switch ;;
+    opensuse:docker-buildx) echo docker-buildx ;;
     opensuse:podman) echo podman ;;
     opensuse:podman-docker) echo podman-docker ;;
     opensuse:kubectl) echo kubernetes-client ;;

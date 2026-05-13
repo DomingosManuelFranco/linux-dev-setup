@@ -104,6 +104,11 @@ setup_pipx() {
 }
 
 setup_rust() {
+  # Source cargo env in case rustup was just installed this session
+  if [[ -f "$HOME/.cargo/env" ]]; then
+    # shellcheck source=/dev/null
+    . "$HOME/.cargo/env"
+  fi
   rustup default stable >/dev/null 2>&1 || true
 }
 
@@ -121,14 +126,41 @@ install_vscode_extensions() {
     return 0
   fi
 
+  local ext_file="$REPO_ROOT/config/vscode/extensions.txt"
+  if [[ ! -f "$ext_file" ]]; then
+    warn "VS Code extensions file not found: $ext_file"
+    return 0
+  fi
+
   while IFS= read -r extension; do
     [[ -z "$extension" ]] && continue
     "$code_bin" --install-extension "$extension" >/dev/null 2>&1 || warn "Failed to install VS Code extension $extension"
-  done < "$REPO_ROOT/config/vscode/extensions.txt"
+  done < "$ext_file"
 }
 
 install_npm_globals() {
+  local globals_file="$REPO_ROOT/config/npm/globals.txt"
+
+  if ! have npm; then
+    warn "npm not found; skipping global npm packages"
+    return 0
+  fi
+
+  if [[ ! -f "$globals_file" ]]; then
+    warn "npm globals file not found: $globals_file"
+    return 0
+  fi
+
   mkdir -p "$HOME/.local/bin"
   npm config set prefix "$HOME/.local" >/dev/null 2>&1 || true
-  npm install -g @react-native-community/cli @biomejs/biome eas-cli eslint_d yarn typescript typescript-language-server vscode-langservers-extracted >/dev/null 2>&1 || true
+
+  local -a globals=()
+  while IFS= read -r pkg; do
+    [[ -z "$pkg" || "$pkg" == \#* ]] && continue
+    globals+=("$pkg")
+  done < "$globals_file"
+
+  if [[ ${#globals[@]} -gt 0 ]]; then
+    npm install -g "${globals[@]}" >/dev/null 2>&1 || true
+  fi
 }

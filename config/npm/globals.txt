@@ -1,0 +1,8 @@
+@react-native-community/cli
+@biomejs/biome
+eas-cli
+eslint_d
+yarn
+typescript
+typescript-language-server
+vscode-langservers-extracted

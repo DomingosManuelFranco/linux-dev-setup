@@ -101,6 +101,13 @@ Applies a small set of safe defaults with `gsettings` when available:
 - favorite apps
 - monospace font preference
 
+Also tries to install a minimal dev-oriented GNOME extension set when local GNOME extension tooling is available:
+
+- AppIndicator and KStatusNotifierItem Support
+- Clipboard Indicator
+- Tiling Assistant
+- Caffeine
+
 ### KDE Plasma
 
 Installs a matching color scheme and basic terminal/browser defaults where possible.
