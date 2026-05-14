@@ -47,16 +47,29 @@ verify_post_install() {
     if [[ "$role" == "web" ]]; then
       verify_command "node"
       verify_command "python"
+      if [[ "$INSTALL_VENDOR" -eq 1 ]]; then
+        verify_command "mkcert"
+        verify_command "mongosh"
+        verify_command "usql"
+      fi
     elif [[ "$role" == "mobile" ]]; then
       verify_command "adb"
       verify_command "java"
+      if [[ "$INSTALL_VENDOR" -eq 1 ]]; then
+        verify_command "flutter"
+        verify_command "maestro"
+        verify_command "bundletool"
+        verify_command "flutter_distributor"
+      fi
     elif [[ "$role" == "devops" ]]; then
       if ! have "docker" && ! have "podman"; then
         record_missing_command "docker/podman"
       fi
       verify_command "kubectl"
       verify_command "helm"
+      verify_command "kustomize"
       verify_command "terraform"
+      verify_command "hadolint"
     fi
   done
 }
@@ -338,9 +351,10 @@ setup_github() {
     log "GitHub already authenticated as ${current_user:-unknown}; skipping auth"
   else
     if [[ "${NON_INTERACTIVE:-0}" -eq 1 ]]; then
-      if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
-        log "GitHub token found; checking auth status..."
-        if ! gh auth status >/dev/null 2>&1; then
+      local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+      if [[ -n "$github_token" ]]; then
+        log "GitHub token found; authenticating GitHub CLI..."
+        if ! printf '%s\n' "$github_token" | gh auth login --git-protocol ssh --with-token >/dev/null 2>&1; then
           record_setup_failure "GitHub non-interactive auth failed with provided token"
           return 0
         fi

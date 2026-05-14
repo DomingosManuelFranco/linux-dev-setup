@@ -1,7 +1,83 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
+# shellcheck source=../lib/common.sh
+source "$REPO_ROOT/lib/common.sh"
+# shellcheck source=../lib/packages.sh
+source "$REPO_ROOT/lib/packages.sh"
+# shellcheck source=../lib/vendor.sh
+source "$REPO_ROOT/lib/vendor.sh"
+
+DESKTOP=""
+INSTALL_OPTIONAL=0
+INSTALL_VENDOR=1
+SETUP_GIT=1
+SETUP_GITHUB=1
+NON_INTERACTIVE=0
+SKIP_SHELL_CHANGE=0
+GIT_NAME=""
+GIT_EMAIL=""
+ROLES=(base)
+
+detect_desktop() {
+  local current_desktop session_desktop session
+
+  current_desktop="${XDG_CURRENT_DESKTOP:-}"
+  session_desktop="${DESKTOP_SESSION:-}"
+  session="${XDG_SESSION_DESKTOP:-}"
+
+  case "${current_desktop,,}:${session_desktop,,}:${session,,}" in
+    *gnome*:*:*|*:*gnome*:*|*:*:*gnome*)
+      printf 'gnome\n'
+      return 0
+      ;;
+    *kde*:*:*|*plasma*:*:*|*:*kde*:*|*:*plasma*:*|*:*:*kde*|*:*:*plasma*)
+      printf 'kde\n'
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+parse_roles() {
+  local role_csv="$1"
+  local raw role
+  local -a parsed=()
+
+  IFS=',' read -r -a raw <<< "$role_csv"
+  for role in "${raw[@]}"; do
+    case "$role" in
+      base|web|mobile|devops)
+        parsed+=("$role")
+        ;;
+      *)
+        warn "Unsupported role: $role"
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ ${#parsed[@]} -eq 0 ]]; then
+    warn "At least one role must be selected"
+    exit 1
+  fi
+
+  ROLES=("${parsed[@]}")
+}
+
+dedupe_packages() {
+  local pkg
+  declare -A seen=()
+  for pkg in "$@"; do
+    [[ -z "$pkg" ]] && continue
+    if [[ -z "${seen[$pkg]:-}" ]]; then
+      seen[$pkg]=1
+      printf '%s\n' "$pkg"
+    fi
   done
 }
 
@@ -9,23 +85,39 @@ collect_packages() {
   local distro="$1"
   local -a selected=()
   local role
+  local pkg mapped
 
   for role in "${ROLES[@]}"; do
-    while IFS= read -r package; do
-      [[ -n "$package" ]] && selected+=("$package")
-    done < <(resolve_packages "$distro" "$role")
+    while IFS= read -r pkg; do
+      [[ -z "$pkg" ]] && continue
+      if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
+        [[ -n "$mapped" ]] && selected+=("$mapped")
+      else
+        record_required_pkg_failure "$pkg"
+      fi
+    done < <(package_group "$role")
   done
 
   if [[ "$INSTALL_OPTIONAL" -eq 1 ]]; then
-    while IFS= read -r package; do
-      [[ -n "$package" ]] && selected+=("$package")
-    done < <(resolve_packages "$distro" gui)
+    while IFS= read -r pkg; do
+      [[ -z "$pkg" ]] && continue
+      if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
+        [[ -n "$mapped" ]] && selected+=("$mapped")
+      else
+        record_optional_failure "$pkg"
+      fi
+    done < <(package_group gui)
   fi
 
   if [[ "${DESKTOP:-}" == "gnome" ]]; then
-    while IFS= read -r package; do
-      [[ -n "$package" ]] && selected+=("$package")
-    done < <(resolve_packages "$distro" gnome)
+    while IFS= read -r pkg; do
+      [[ -z "$pkg" ]] && continue
+      if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
+        [[ -n "$mapped" ]] && selected+=("$mapped")
+      else
+        record_required_pkg_failure "$pkg"
+      fi
+    done < <(package_group gnome)
   fi
 
   dedupe_packages "${selected[@]}"
@@ -101,12 +193,12 @@ Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devop
   --non-interactive    run without prompting for input
   --git-name NAME      set git user.name
   --git-email EMAIL    set git user.email
-  --skip-shell-change  do not attempt to chsh to zsh]
+  --skip-shell-change  do not attempt to chsh to zsh
 
   --desktop    apply optional desktop-specific settings
   --roles      comma-separated install roles; default is 'base' only
                use --roles base,web,mobile,devops to install everything
-  --optional   also attempt GUI packages like VS Code, Chrome, Android Studio, and Podman Desktop
+  --optional   also attempt GUI packages like VS Code, Chrome, JetBrains Toolbox, and Podman Desktop
   --no-vendor  skip vendor bootstraps like mise, Flutter SDK, and Android SDK components
   --no-git     skip interactive git user configuration
   --no-github  skip GitHub authentication and SSH key setup
@@ -235,6 +327,8 @@ case "$distro" in
   fedora) install_fedora ;;
   ubuntu) install_apt_like ubuntu ;;
   debian) install_apt_like debian ;;
+  pikaos) install_apt_like pikaos ;;
+  opensuse) install_opensuse ;;
 esac
 
 link_dotfiles

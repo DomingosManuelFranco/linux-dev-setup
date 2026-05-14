@@ -225,7 +225,7 @@ install_android_cmdline_tools() {
 }
 
 bootstrap_optional_vendors() {
-  install_jetbrains_toolbox
+  install_jetbrains_toolbox || true
 
   if have flatpak; then
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1 || true
@@ -758,16 +758,29 @@ install_jetbrains_toolbox() {
   link="$(curl -fsSL "https://data.services.jetbrains.com/products/releases?code=TBA&latest=true&type=release" | grep -oP '"linux":\{"link":"\K[^"]+' || true)"
   
   if [[ -z "$link" ]]; then
-    record_vendor_failure "jetbrains-toolbox"
-    return 1
+    record_optional_failure "jetbrains-toolbox"
+    record_warning "JetBrains Toolbox metadata lookup failed"
+    return 0
   fi
   
-  download_release_asset "$link" "$archive"
-  tar -xzf "$archive" -C "$extract_dir" --strip-components=1
+  if ! download_release_asset "$link" "$archive"; then
+    record_optional_failure "jetbrains-toolbox"
+    record_warning "JetBrains Toolbox download failed"
+    return 0
+  fi
+
+  if ! tar -xzf "$archive" -C "$extract_dir" --strip-components=1; then
+    record_optional_failure "jetbrains-toolbox"
+    record_warning "JetBrains Toolbox archive extraction failed"
+    rm -rf "$extract_dir" "$archive"
+    return 0
+  fi
+
   if [[ -f "$extract_dir/jetbrains-toolbox" ]]; then
     install -m 0755 "$extract_dir/jetbrains-toolbox" "$HOME/.local/bin/jetbrains-toolbox"
   else
-    record_vendor_failure "jetbrains-toolbox"
+    record_optional_failure "jetbrains-toolbox"
+    record_warning "JetBrains Toolbox binary not found after extraction"
   fi
   rm -rf "$extract_dir" "$archive"
 }
