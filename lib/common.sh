@@ -6,6 +6,102 @@ DOTFILES_ROOT="$REPO_ROOT/config/home"
 BACKUP_ROOT="$HOME/.local/share/dev-setup-portable/backups"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
+declare -a FAILED_REQUIRED_PKGS=()
+declare -a FAILED_VENDOR_TOOLS=()
+declare -a FAILED_SETUP=()
+declare -a FAILED_OPTIONAL_GUI=()
+declare -a WARNINGS=()
+declare -a MISSING_COMMANDS=()
+
+record_required_pkg_failure() {
+  # Check if it's an optional package before adding to required
+  local pkg="$1"
+  if [[ "$pkg" == "code" || "$pkg" == "google-chrome-stable" || "$pkg" == "google-chrome" || "$pkg" == "jetbrains-toolbox" || "$pkg" == "podman-desktop" ]]; then
+    FAILED_OPTIONAL_GUI+=("$pkg")
+  else
+    FAILED_REQUIRED_PKGS+=("$pkg")
+  fi
+}
+record_vendor_failure() { FAILED_VENDOR_TOOLS+=("$1"); }
+record_setup_failure() { FAILED_SETUP+=("$1"); }
+record_optional_failure() { FAILED_OPTIONAL_GUI+=("$1"); }
+record_warning() { WARNINGS+=("$1"); }
+record_missing_command() { MISSING_COMMANDS+=("$1"); }
+
+verify_command() {
+  local cmd="$1"
+  if ! have "$cmd"; then
+    record_missing_command "$cmd"
+  fi
+}
+
+verify_post_install() {
+  verify_command "git"
+  verify_command "zsh"
+  verify_command "nvim"
+  if [[ "$INSTALL_VENDOR" -eq 1 ]]; then
+    verify_command "mise"
+    verify_command "gh"
+  fi
+  for role in "${ROLES[@]}"; do
+    if [[ "$role" == "web" ]]; then
+      verify_command "node"
+      verify_command "python"
+    elif [[ "$role" == "mobile" ]]; then
+      verify_command "adb"
+      verify_command "java"
+    elif [[ "$role" == "devops" ]]; then
+      if ! have "docker" && ! have "podman"; then
+        record_missing_command "docker/podman"
+      fi
+      verify_command "kubectl"
+      verify_command "helm"
+      verify_command "terraform"
+    fi
+  done
+}
+
+print_final_summary() {
+  local failed=0
+  echo ""
+  log "=== Install Summary ==="
+  if [[ ${#FAILED_REQUIRED_PKGS[@]} -gt 0 ]]; then
+    log "Failed required packages: ${FAILED_REQUIRED_PKGS[*]}"
+    failed=1
+  fi
+  if [[ ${#FAILED_VENDOR_TOOLS[@]} -gt 0 ]]; then
+    log "Failed vendor tools: ${FAILED_VENDOR_TOOLS[*]}"
+    failed=1
+  fi
+  if [[ ${#FAILED_SETUP[@]} -gt 0 ]]; then
+    log "Failed setup steps: ${FAILED_SETUP[*]}"
+    failed=1
+  fi
+  if [[ ${#MISSING_COMMANDS[@]} -gt 0 ]]; then
+    log "Missing expected commands: ${MISSING_COMMANDS[*]}"
+    failed=1
+  fi
+  if [[ ${#FAILED_OPTIONAL_GUI[@]} -gt 0 ]]; then
+    log "Skipped optional GUI packages: ${FAILED_OPTIONAL_GUI[*]}"
+  fi
+  if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+    log "Warnings: ${WARNINGS[*]}"
+  fi
+
+  if [[ $failed -eq 1 ]]; then
+    log "Install failed due to missing required components."
+    exit 1
+  else
+    log "Install finished successfully."
+    if [[ -n "${DESKTOP:-}" ]]; then
+      log "Applied desktop profile: $DESKTOP"
+    fi
+    log "Restart your session so shell and desktop defaults are fully applied"
+    exit 0
+  fi
+}
+
+
 log() {
   printf '[dev-setup] %s\n' "$*"
 }
@@ -156,51 +252,53 @@ install_vscode_extensions() {
 }
 
 setup_git() {
-  # Skip if git is not installed
   if ! have git; then
     warn "git not found; skipping git configuration"
     return 0
   fi
 
-  # Read existing values as defaults so re-runs are non-destructive
   local current_name current_email
   current_name="$(git config --global user.name 2>/dev/null || true)"
   current_email="$(git config --global user.email 2>/dev/null || true)"
 
-  # Prompt for name
-  local git_name
-  if [[ -n "$current_name" ]]; then
-    printf '[dev-setup] Git user.name [%s]: ' "$current_name"
+  local git_name="$current_name"
+  local git_email="$current_email"
+
+  if [[ "${NON_INTERACTIVE:-0}" -eq 1 ]]; then
+    if [[ -n "${GIT_NAME:-}" ]]; then git_name="$GIT_NAME"; fi
+    if [[ -n "${GIT_EMAIL:-}" ]]; then git_email="$GIT_EMAIL"; fi
+    if [[ -z "$git_name" || -z "$git_email" ]]; then
+      warn "Missing --git-name or --git-email in non-interactive mode; skipping git config"
+      return 0
+    fi
   else
-    printf '[dev-setup] Git user.name: '
-  fi
-  IFS= read -r git_name
-  git_name="${git_name:-$current_name}"
+    if [[ -n "$current_name" ]]; then
+      printf '[dev-setup] Git user.name [%s]: ' "$current_name"
+    else
+      printf '[dev-setup] Git user.name: '
+    fi
+    local input_name
+    IFS= read -r input_name
+    git_name="${input_name:-$current_name}"
 
-  if [[ -z "$git_name" ]]; then
-    warn "No git user.name provided; skipping git configuration"
-    return 0
+    if [[ -n "$current_email" ]]; then
+      printf '[dev-setup] Git user.email [%s]: ' "$current_email"
+    else
+      printf '[dev-setup] Git user.email: '
+    fi
+    local input_email
+    IFS= read -r input_email
+    git_email="${input_email:-$current_email}"
   fi
 
-  # Prompt for email
-  local git_email
-  if [[ -n "$current_email" ]]; then
-    printf '[dev-setup] Git user.email [%s]: ' "$current_email"
-  else
-    printf '[dev-setup] Git user.email: '
-  fi
-  IFS= read -r git_email
-  git_email="${git_email:-$current_email}"
-
-  if [[ -z "$git_email" ]]; then
-    warn "No git user.email provided; skipping git configuration"
+  if [[ -z "$git_name" || -z "$git_email" ]]; then
+    warn "Incomplete git user config provided; skipping"
     return 0
   fi
 
   git config --global user.name  "$git_name"
   git config --global user.email "$git_email"
 
-  # Sensible global defaults (only set if not already configured)
   git config --global --get core.editor      >/dev/null 2>&1 || git config --global core.editor      "nvim"
   git config --global --get core.autocrlf    >/dev/null 2>&1 || git config --global core.autocrlf    "input"
   git config --global --get core.pager       >/dev/null 2>&1 || git config --global core.pager       "delta"
@@ -211,7 +309,6 @@ setup_git() {
   git config --global --get fetch.prune      >/dev/null 2>&1 || git config --global fetch.prune      "true"
   git config --global --get diff.colorMoved  >/dev/null 2>&1 || git config --global diff.colorMoved  "zebra"
 
-  # delta pager options (only if delta is available)
   if have delta; then
     git config --global --get delta.navigate   >/dev/null 2>&1 || git config --global delta.navigate   "true"
     git config --global --get delta.side-by-side >/dev/null 2>&1 || git config --global delta.side-by-side "true"
@@ -219,7 +316,6 @@ setup_git() {
     git config --global --get merge.conflictstyle >/dev/null 2>&1 || git config --global merge.conflictstyle "diff3"
   fi
 
-  # Useful aliases (skip if already set)
   git config --global --get alias.st   >/dev/null 2>&1 || git config --global alias.st   "status -sb"
   git config --global --get alias.co   >/dev/null 2>&1 || git config --global alias.co   "checkout"
   git config --global --get alias.br   >/dev/null 2>&1 || git config --global alias.br   "branch -vv"
@@ -231,31 +327,42 @@ setup_git() {
 }
 
 setup_github() {
-  # Requires gh (GitHub CLI) in PATH
   if ! have gh; then
-    warn "gh (GitHub CLI) not found; skipping GitHub account setup"
+    record_setup_failure "gh (GitHub CLI) not found"
     return 0
   fi
 
-  # Check if already authenticated
   if gh auth status >/dev/null 2>&1; then
     local current_user
     current_user="$(gh api user --jq '.login' 2>/dev/null || true)"
     log "GitHub already authenticated as ${current_user:-unknown}; skipping auth"
   else
-    log "Starting GitHub authentication (browser or token)…"
-    gh auth login --git-protocol ssh --web || \
-      gh auth login --git-protocol ssh     || \
-      warn "GitHub auth failed; run 'gh auth login' manually"
+    if [[ "${NON_INTERACTIVE:-0}" -eq 1 ]]; then
+      if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
+        log "GitHub token found; checking auth status..."
+        if ! gh auth status >/dev/null 2>&1; then
+          record_setup_failure "GitHub non-interactive auth failed with provided token"
+          return 0
+        fi
+      else
+        record_setup_failure "GitHub non-interactive auth failed: no GH_TOKEN provided"
+        return 0
+      fi
+    else
+      log "Starting GitHub authentication (browser or token)…"
+      if ! (gh auth login --git-protocol ssh --web || gh auth login --git-protocol ssh); then
+        record_setup_failure "GitHub auth failed"
+        return 0
+      fi
+    fi
   fi
 
-  # Generate SSH key if none exists for this machine
   local ssh_key="$HOME/.ssh/id_ed25519"
   if [[ ! -f "$ssh_key" ]]; then
     local git_email
     git_email="$(git config --global user.email 2>/dev/null || true)"
 
-    if [[ -z "$git_email" ]]; then
+    if [[ "${NON_INTERACTIVE:-0}" -eq 0 && -z "$git_email" ]]; then
       printf '[dev-setup] Email for SSH key: '
       IFS= read -r git_email
     fi
@@ -267,35 +374,33 @@ setup_github() {
       ssh-keygen -t ed25519 -C "$git_email" -f "$ssh_key" -N ""
       log "SSH key generated: $ssh_key"
     else
-      warn "No email provided; skipping SSH key generation"
+      record_warning "No email provided; skipping SSH key generation"
       return 0
     fi
   else
     log "SSH key already exists: $ssh_key"
   fi
 
-  # Upload key to GitHub if gh is authenticated
   if gh auth status >/dev/null 2>&1; then
     local hostname key_title
     hostname="$(hostname -s 2>/dev/null || printf 'linux')"
     key_title="$hostname-ed25519"
 
-    # Check if this exact public key blob is already uploaded (compare base64 field, not just the type)
     local pub_blob
-    pub_blob="$(awk '{print $2}' "${ssh_key}.pub")"
-    if gh ssh-key list 2>/dev/null | grep -qF "$pub_blob"; then
+    pub_blob="$(awk '{print $2}' "${ssh_key}.pub" 2>/dev/null || true)"
+    if [[ -n "$pub_blob" ]] && gh ssh-key list 2>/dev/null | grep -qF "$pub_blob"; then
       log "SSH public key already on GitHub; skipping upload"
     else
-      gh ssh-key add "${ssh_key}.pub" --title "$key_title" \
-        && log "SSH public key uploaded to GitHub as '$key_title'" \
-        || warn "Could not upload SSH key to GitHub; add it manually at https://github.com/settings/ssh/new"
+      if ! gh ssh-key add "${ssh_key}.pub" --title "$key_title"; then
+        record_setup_failure "Could not upload SSH key to GitHub"
+      else
+        log "SSH public key uploaded to GitHub as '$key_title'"
+      fi
     fi
   fi
 
-  # Ensure SSH agent knows about the key — reuse existing agent, don't spawn a new one
   if [[ -f "$ssh_key" ]]; then
     if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
-      # No agent running in this session; start one and export the vars
       eval "$(ssh-agent -s)" 2>/dev/null || true
     fi
     ssh-add "$ssh_key" >/dev/null 2>&1 || true

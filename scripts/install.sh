@@ -1,79 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
-# shellcheck source=../lib/common.sh
-source "$REPO_ROOT/lib/common.sh"
-# shellcheck source=../lib/packages.sh
-source "$REPO_ROOT/lib/packages.sh"
-# shellcheck source=../lib/vendor.sh
-source "$REPO_ROOT/lib/vendor.sh"
-
-DESKTOP=""
-INSTALL_OPTIONAL=0
-INSTALL_VENDOR=1
-SETUP_GIT=1
-SETUP_GITHUB=1
-ROLES=(base)
-
-detect_desktop() {
-  local current_desktop session_desktop session
-
-  current_desktop="${XDG_CURRENT_DESKTOP:-}"
-  session_desktop="${DESKTOP_SESSION:-}"
-  session="${XDG_SESSION_DESKTOP:-}"
-
-  case "${current_desktop,,}:${session_desktop,,}:${session,,}" in
-    *gnome*:*:*|*:*gnome*:*|*:*:*gnome*)
-      printf 'gnome\n'
-      return 0
-      ;;
-    *kde*:*:*|*plasma*:*:*|*:*kde*:*|*:*plasma*:*|*:*:*kde*|*:*:*plasma*)
-      printf 'kde\n'
-      return 0
-      ;;
-  esac
-
-  return 1
-}
-
-parse_roles() {
-  local role_csv="$1"
-  local raw role
-  local -a parsed=()
-
-  IFS=',' read -r -a raw <<< "$role_csv"
-  for role in "${raw[@]}"; do
-    case "$role" in
-    base|web|mobile|devops)
-        parsed+=("$role")
-        ;;
-      *)
-        warn "Unsupported role: $role"
-        exit 1
-        ;;
-    esac
-  done
-
-  if [[ ${#parsed[@]} -eq 0 ]]; then
-    warn "At least one role must be selected"
-    exit 1
-  fi
-
-  ROLES=("${parsed[@]}")
-}
-
-dedupe_packages() {
-  local pkg
-  declare -A seen=()
-  for pkg in "$@"; do
-    [[ -z "$pkg" ]] && continue
-    if [[ -z "${seen[$pkg]:-}" ]]; then
-      seen[$pkg]=1
-      printf '%s\n' "$pkg"
-    fi
   done
 }
 
@@ -132,6 +60,22 @@ while [[ $# -gt 0 ]]; do
       parse_roles "${2:-}"
       shift 2
       ;;
+    --non-interactive)
+      NON_INTERACTIVE=1
+      shift
+      ;;
+    --git-name)
+      GIT_NAME="${2:-}"
+      shift 2
+      ;;
+    --git-email)
+      GIT_EMAIL="${2:-}"
+      shift 2
+      ;;
+    --skip-shell-change)
+      SKIP_SHELL_CHANGE=1
+      shift
+      ;;
     --no-vendor)
       INSTALL_VENDOR=0
       shift
@@ -146,7 +90,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor] [--no-git] [--no-github]
+Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor] [--no-git] [--no-github] [--non-interactive] [--git-name NAME] [--git-email EMAIL] [--skip-shell-change]
+
+  --desktop            apply optional desktop-specific settings
+  --roles              comma-separated install roles; default is 'base' only
+  --optional           also attempt GUI packages
+  --no-vendor          skip vendor bootstraps
+  --no-git             skip git user configuration
+  --no-github          skip GitHub authentication and SSH key setup
+  --non-interactive    run without prompting for input
+  --git-name NAME      set git user.name
+  --git-email EMAIL    set git user.email
+  --skip-shell-change  do not attempt to chsh to zsh]
 
   --desktop    apply optional desktop-specific settings
   --roles      comma-separated install roles; default is 'base' only
@@ -185,68 +140,71 @@ log "Log file: $LOG_FILE"
 if [[ -n "$DESKTOP" ]]; then
   log "Detected desktop profile: $DESKTOP"
 fi
+log "Optional GUI apps: $INSTALL_OPTIONAL"
+log "Vendor tools: $INSTALL_VENDOR"
+log "Non-interactive: $NON_INTERACTIVE"
 
 filter_arch_packages() {
-  local pkg available=()
+  filtered=()
   for pkg in "$@"; do
     if pacman -Si "$pkg" >/dev/null 2>&1; then
-      available+=("$pkg")
+      filtered+=("$pkg")
     else
       warn "Skipping unavailable package: $pkg"
+      record_required_pkg_failure "$pkg"
     fi
   done
-  printf '%s\n' "${available[@]}"
 }
 
 filter_fedora_packages() {
-  local pkg available=()
+  filtered=()
   for pkg in "$@"; do
     if dnf info "$pkg" >/dev/null 2>&1; then
-      available+=("$pkg")
+      filtered+=("$pkg")
     else
       warn "Skipping unavailable package: $pkg"
+      record_required_pkg_failure "$pkg"
     fi
   done
-  printf '%s\n' "${available[@]}"
 }
 
 filter_apt_packages() {
-  local pkg available=()
+  filtered=()
   for pkg in "$@"; do
     if apt-cache show "$pkg" >/dev/null 2>&1; then
-      available+=("$pkg")
+      filtered+=("$pkg")
     else
       warn "Skipping unavailable package: $pkg"
+      record_required_pkg_failure "$pkg"
     fi
   done
-  printf '%s\n' "${available[@]}"
 }
 
 filter_zypper_packages() {
-  local pkg available=()
+  filtered=()
   for pkg in "$@"; do
-    if zypper --non-interactive search --match-exact "$pkg" | grep -Eq '^[[:space:]]*[ivp][[:space:]]*\|'; then
-      available+=("$pkg")
+    if zypper --non-interactive search --match-exact "$pkg" | grep -Eq "^[[:space:]]*[ivp][[:space:]]*\|"; then
+      filtered+=("$pkg")
     else
       warn "Skipping unavailable package: $pkg"
+      record_required_pkg_failure "$pkg"
     fi
   done
-  printf '%s\n' "${available[@]}"
 }
 
 install_arch() {
-  local -a packages=() filtered=()
+  local -a packages=()
   mapfile -t packages < <(collect_packages arch)
-  mapfile -t filtered < <(filter_arch_packages "${packages[@]}")
+  filter_arch_packages "${packages[@]}"
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo pacman -Syu --needed --noconfirm "${filtered[@]}"
   fi
 }
 
 install_fedora() {
-  local -a packages=() filtered=()
+  local -a packages=()
   mapfile -t packages < <(collect_packages fedora)
-  mapfile -t filtered < <(filter_fedora_packages "${packages[@]}")
+  filter_fedora_packages "${packages[@]}"
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo dnf install -y "${filtered[@]}"
   fi
@@ -254,19 +212,19 @@ install_fedora() {
 
 install_apt_like() {
   local distro_name="$1"
-  local -a packages=() filtered=()
+  local -a packages=()
   sudo apt-get update
   mapfile -t packages < <(collect_packages "$distro_name")
-  mapfile -t filtered < <(filter_apt_packages "${packages[@]}")
+  filter_apt_packages "${packages[@]}"
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo apt-get install -y "${filtered[@]}"
   fi
 }
 
 install_opensuse() {
-  local -a packages=() filtered=()
+  local -a packages=()
   mapfile -t packages < <(collect_packages opensuse)
-  mapfile -t filtered < <(filter_zypper_packages "${packages[@]}")
+  filter_zypper_packages "${packages[@]}"
   if [[ ${#filtered[@]} -gt 0 ]]; then
     sudo zypper --non-interactive install --no-recommends "${filtered[@]}"
   fi
@@ -277,8 +235,6 @@ case "$distro" in
   fedora) install_fedora ;;
   ubuntu) install_apt_like ubuntu ;;
   debian) install_apt_like debian ;;
-  pikaos) install_apt_like pikaos ;;
-  opensuse) install_opensuse ;;
 esac
 
 link_dotfiles
@@ -302,9 +258,11 @@ if [[ "$SETUP_GITHUB" -eq 1 ]]; then
   setup_github
 fi
 
-if have chsh && have zsh; then
-  if [[ "${SHELL:-}" != "$(command -v zsh)" ]]; then
-    chsh -s "$(command -v zsh)" || warn "Could not change default shell"
+if [[ "$SKIP_SHELL_CHANGE" -eq 0 && "$NON_INTERACTIVE" -eq 0 ]]; then
+  if have chsh && have zsh; then
+    if [[ "${SHELL:-}" != "$(command -v zsh)" ]]; then
+      chsh -s "$(command -v zsh)" || warn "Could not change default shell"
+    fi
   fi
 fi
 
@@ -323,8 +281,7 @@ case "$DESKTOP" in
     ;;
 esac
 
-log "Install finished"
-if [[ -n "$DESKTOP" ]]; then
-  log "Applied desktop profile: $DESKTOP"
-fi
-log "Restart your session so shell and desktop defaults are fully applied"
+
+verify_post_install
+
+print_final_summary

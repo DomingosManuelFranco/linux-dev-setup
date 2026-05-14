@@ -179,10 +179,8 @@ install_android_cmdline_tools() {
   local latest_root="$tools_root/latest"
   local sdkmanager_bin="$latest_root/bin/sdkmanager"
 
-  # KVM acceleration check
   if [[ ! -e /dev/kvm ]]; then
-    warn "KVM (/dev/kvm) not available — Android emulator will run without hardware acceleration and will be very slow."
-    warn "Enable KVM in your BIOS/UEFI, or run: sudo modprobe kvm_intel (or kvm_amd), then add your user to the 'kvm' group."
+    record_warning "KVM (/dev/kvm) not available — Android emulator hardware acceleration disabled."
   else
     log "KVM available — Android emulator hardware acceleration enabled"
   fi
@@ -190,24 +188,9 @@ install_android_cmdline_tools() {
   mkdir -p "$tools_root"
 
   if [[ ! -x "$sdkmanager_bin" ]]; then
-    log "Resolving latest Android command-line tools version..."
-    local version_url="https://developer.android.com/studio/index.html"
-    # Fetch the stable cmdline-tools version from the Android Studio releases page
-    # The pattern is: commandlinetools-linux-<version>_latest.zip
-    local resolved_version
-    resolved_version="$(curl -fsSL 'https://dl.google.com/android/repository/repository2-3.xml' \
-      | grep -oP 'commandlinetools-linux-\K[0-9]+' | sort -rn | head -1 || true)"
-
-    if [[ -z "$resolved_version" ]]; then
-      # Fallback to known-good version if detection fails
-      resolved_version="11076708"
-      warn "Could not detect latest Android cmdline-tools version; using fallback: $resolved_version"
-    else
-      log "Detected Android cmdline-tools version: $resolved_version"
-    fi
-
+    log "Installing Android command-line tools..."
+    local resolved_version="11076708"
     local archive="$VENDOR_TMP_DIR/commandlinetools-linux-${resolved_version}.zip"
-    log "Installing Android command-line tools"
     curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-${resolved_version}_latest.zip" -o "$archive"
     rm -rf "$latest_root"
     unzip -qo "$archive" -d "$tools_root"
@@ -217,23 +200,33 @@ install_android_cmdline_tools() {
 
   if [[ -x "$sdkmanager_bin" ]]; then
     yes | "$sdkmanager_bin" --licenses >/dev/null 2>&1 || true
-    # Install the latest stable platform: detect highest available, fall back to android-35
-    local latest_platform
-    latest_platform="$("$sdkmanager_bin" --sdk_root="$android_home" --list 2>/dev/null \
-      | grep -oP 'platforms;android-\K[0-9]+' | sort -rn | head -1 || true)"
+    
+    local platforms
+    platforms="$("$sdkmanager_bin" --sdk_root="$android_home" --list 2>/dev/null | grep -oP '^  platforms;android-\K[0-9]+' | sort -rn || true)"
+    local latest_platform="$(echo "$platforms" | head -1)"
     latest_platform="${latest_platform:-35}"
-    "$sdkmanager_bin" --sdk_root="$android_home" \
+    
+    local build_tools
+    build_tools="$("$sdkmanager_bin" --sdk_root="$android_home" --list 2>/dev/null | grep -oP '^  build-tools;\K[0-9]+\.[0-9]+\.[0-9]+' | sort -rV || true)"
+    local latest_build_tools="$(echo "$build_tools" | head -1)"
+    latest_build_tools="${latest_build_tools:-35.0.0}"
+    
+    if ! "$sdkmanager_bin" --sdk_root="$android_home" \
       "platform-tools" \
       "platforms;android-${latest_platform}" \
-      "build-tools;${latest_platform}.0.0" \
+      "build-tools;${latest_build_tools}" \
       "cmdline-tools;latest" \
-      "emulator" >/dev/null 2>&1 || warn "Some Android SDK components failed"
+      "emulator" >/dev/null 2>&1; then
+      record_vendor_failure "android-sdk-components"
+    fi
   else
-    warn "sdkmanager not available; skipping Android SDK components"
+    record_vendor_failure "android-sdkmanager"
   fi
 }
 
 bootstrap_optional_vendors() {
+  install_jetbrains_toolbox
+
   if have flatpak; then
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1 || true
   fi
@@ -751,4 +744,30 @@ bootstrap_role_vendors() {
       install_flyctl
       ;;
   esac
+}
+
+install_jetbrains_toolbox() {
+  have jetbrains-toolbox && return 0
+  log "Installing JetBrains Toolbox"
+  local extract_dir="$VENDOR_TMP_DIR/jetbrains-toolbox"
+  local archive="$VENDOR_TMP_DIR/jetbrains-toolbox.tar.gz"
+  rm -rf "$extract_dir"
+  mkdir -p "$extract_dir" "$VENDOR_TMP_DIR" "$HOME/.local/bin"
+  
+  local link
+  link="$(curl -fsSL "https://data.services.jetbrains.com/products/releases?code=TBA&latest=true&type=release" | grep -oP '"linux":\{"link":"\K[^"]+' || true)"
+  
+  if [[ -z "$link" ]]; then
+    record_vendor_failure "jetbrains-toolbox"
+    return 1
+  fi
+  
+  download_release_asset "$link" "$archive"
+  tar -xzf "$archive" -C "$extract_dir" --strip-components=1
+  if [[ -f "$extract_dir/jetbrains-toolbox" ]]; then
+    install -m 0755 "$extract_dir/jetbrains-toolbox" "$HOME/.local/bin/jetbrains-toolbox"
+  else
+    record_vendor_failure "jetbrains-toolbox"
+  fi
+  rm -rf "$extract_dir" "$archive"
 }

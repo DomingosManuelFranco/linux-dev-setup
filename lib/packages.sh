@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 detect_distro() {
-  if [[ -r /etc/os-release ]]; then
-    . /etc/os-release
+  local os_release_file="${1:-/etc/os-release}"
+  if [[ -r "$os_release_file" ]]; then
+    . "$os_release_file"
     case "${ID:-}" in
       arch|fedora|ubuntu|debian)
         printf '%s\n' "$ID"
@@ -131,7 +132,7 @@ EOF
 code
 google-chrome
 podman-desktop
-android-studio
+jetbrains-toolbox
 EOF
       ;;
     *)
@@ -219,7 +220,7 @@ map_package() {
     arch:code) echo code ;;
     arch:google-chrome) echo google-chrome ;;
     arch:podman-desktop) echo podman-desktop ;;
-    arch:android-studio) echo android-studio ;;
+    arch:jetbrains-toolbox) return 1 ;;  # vendor managed
 
     fedora:bash) echo bash ;;
     fedora:zsh) echo zsh ;;
@@ -295,7 +296,7 @@ map_package() {
     fedora:code) echo code ;;
     fedora:google-chrome) echo google-chrome-stable ;;
     fedora:podman-desktop) echo podman-desktop ;;
-    fedora:android-studio) echo android-studio ;;
+    fedora:jetbrains-toolbox) return 1 ;;  # vendor managed
 
     ubuntu:bash|debian:bash|pikaos:bash) echo bash ;;
     ubuntu:zsh|debian:zsh|pikaos:zsh) echo zsh ;;
@@ -358,20 +359,20 @@ map_package() {
     ubuntu:podman-docker|debian:podman-docker|pikaos:podman-docker) echo podman-docker ;;
     ubuntu:buildah|debian:buildah|pikaos:buildah) echo buildah ;;
     ubuntu:skopeo|debian:skopeo|pikaos:skopeo) echo skopeo ;;
-    ubuntu:kubectl|debian:kubectl|pikaos:kubectl) echo kubectl ;;
-    ubuntu:helm|debian:helm|pikaos:helm) echo helm ;;
+    ubuntu:kubectl|debian:kubectl|pikaos:kubectl) return 1 ;;  # Not in default apt repos
+    ubuntu:helm|debian:helm|pikaos:helm) return 1 ;;  # Not in default apt repos
     ubuntu:kustomize|debian:kustomize|pikaos:kustomize) printf '[dev-setup] warning: kustomize not in apt repos; install manually or via vendor binary\n' >&2; return 1 ;;
-    ubuntu:terraform|debian:terraform|pikaos:terraform) echo terraform ;;
+    ubuntu:terraform|debian:terraform|pikaos:terraform) return 1 ;;  # Not in default apt repos
     ubuntu:ansible|debian:ansible|pikaos:ansible) echo ansible ;;
-    ubuntu:packer|debian:packer|pikaos:packer) echo packer ;;
+    ubuntu:packer|debian:packer|pikaos:packer) return 1 ;;  # Not in default apt repos
     ubuntu:aws-cli|debian:aws-cli|pikaos:aws-cli) echo awscli ;;
-    ubuntu:azure-cli|debian:azure-cli|pikaos:azure-cli) echo azure-cli ;;
+    ubuntu:azure-cli|debian:azure-cli|pikaos:azure-cli) return 1 ;;  # Not in default apt repos
     ubuntu:age|debian:age|pikaos:age) echo age ;;
     ubuntu:hadolint|debian:hadolint|pikaos:hadolint) return 1 ;;  # installed via vendor step
     ubuntu:code|debian:code|pikaos:code) printf '[dev-setup] warning: VS Code (code) not in apt repos; add Microsoft repo or install manually\n' >&2; return 1 ;;
     ubuntu:google-chrome|debian:google-chrome|pikaos:google-chrome) printf '[dev-setup] warning: Google Chrome not in apt repos; add Google repo or install manually\n' >&2; return 1 ;;
     ubuntu:podman-desktop|debian:podman-desktop|pikaos:podman-desktop) printf '[dev-setup] warning: Podman Desktop not in apt repos; install from https://podman-desktop.io manually\n' >&2; return 1 ;;
-    ubuntu:android-studio|debian:android-studio|pikaos:android-studio) printf '[dev-setup] warning: Android Studio not in apt repos; install from https://developer.android.com manually\n' >&2; return 1 ;;
+    ubuntu:jetbrains-toolbox|debian:jetbrains-toolbox|pikaos:jetbrains-toolbox) return 1 ;;  # vendor managed
 
     opensuse:bash) echo bash ;;
     opensuse:zsh) echo zsh ;;
@@ -447,7 +448,7 @@ map_package() {
     opensuse:code) echo code ;;
     opensuse:google-chrome) echo google-chrome-stable ;;
     opensuse:podman-desktop) echo podman-desktop ;;
-    opensuse:android-studio) echo android-studio ;;
+    opensuse:jetbrains-toolbox) return 1 ;;  # vendor managed
     *) return 1 ;;
   esac
 }
