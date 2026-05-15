@@ -36,3 +36,12 @@
 	lg    = log --oneline --graph --decorate --all
 	undo  = reset HEAD~1 --mixed
 	wip   = !git add -A && git commit -m 'wip'
+[user]
+	name = DomingosManuelFranco
+	email = manuelfranco070@gmail.com
+[credential "https://github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential

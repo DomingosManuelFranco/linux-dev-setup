@@ -86,3 +86,6 @@ bindkey '^[[F' end-of-line
 bindkey '^[[3~' delete-char
 
 [[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
+
+# opencode
+export PATH=/home/woodzo/.opencode/bin:$PATH

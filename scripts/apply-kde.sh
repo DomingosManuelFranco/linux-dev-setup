@@ -91,7 +91,7 @@ if command -v kwriteconfig6 >/dev/null 2>&1 || command -v kwriteconfig5 >/dev/nu
   if [[ -d "$local_konsole_profiles" ]]; then
     for profile in "$local_konsole_profiles"/*.profile; do
       [[ -f "$profile" ]] || continue
-      kwriteconfig --file "$profile" --group Appearance --key Font "JetBrainsMono Nerd Font,11,-1,5,50,0,0,0,0,0" || true
+      kwriteconfig --file "$profile" --group Appearance --key Font "JetBrainsMono Nerd Font Mono,12,-1,5,50,0,0,0,0,0" || true
     done
   fi
 fi
