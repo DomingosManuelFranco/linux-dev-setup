@@ -156,6 +156,38 @@ install_yq() {
   chmod 0755 "$HOME/.local/bin/yq"
 }
 
+install_jetbrains_mono_nerd_font() {
+  if fc-list 2>/dev/null | grep -q "JetBrainsMono Nerd Font Mono"; then
+    return 0
+  fi
+
+  local archive="$VENDOR_TMP_DIR/JetBrainsMono.zip"
+  local font_dir="$HOME/.local/share/fonts/JetBrainsMonoNerd"
+
+  log "Installing JetBrains Mono Nerd Font"
+  rm -rf "$font_dir"
+  mkdir -p "$font_dir" "$VENDOR_TMP_DIR"
+
+  if ! download_release_asset \
+    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip" \
+    "$archive"; then
+    warn "JetBrains Mono Nerd Font download failed"
+    return 0
+  fi
+
+  if ! unzip -qo "$archive" -d "$font_dir" >/dev/null 2>&1; then
+    warn "JetBrains Mono Nerd Font extraction failed"
+    rm -f "$archive"
+    return 0
+  fi
+
+  rm -f "$archive"
+
+  if have fc-cache; then
+    fc-cache -f "$HOME/.local/share/fonts" >/dev/null 2>&1 || warn "Font cache refresh failed for JetBrains Mono Nerd Font"
+  fi
+}
+
 install_flutter_sdk() {
   if [[ -d "$FLUTTER_ROOT/.git" ]]; then
     log "Updating Flutter SDK"
@@ -702,6 +734,7 @@ bootstrap_role_vendors() {
   install_uv_if_missing
   install_rustup_if_missing
   install_fzf_tab
+  install_jetbrains_mono_nerd_font
   install_yq
 
   case "$1" in

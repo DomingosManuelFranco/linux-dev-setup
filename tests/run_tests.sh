@@ -128,12 +128,81 @@ test_package_resolution() {
   [[ "$res" == "google-chrome-stable" ]] || fail "Expected google-chrome-stable for fedora, got $res"
   pass "fedora google-chrome mapping"
 
+  res=$(map_package fedora wget)
+  [[ "$res" == "wget2-wget" ]] || fail "Expected wget2-wget for fedora, got $res"
+  pass "fedora wget mapping"
+
+  res=$(map_package fedora p7zip)
+  [[ "$res" == "7zip" ]] || fail "Expected 7zip for fedora, got $res"
+  pass "fedora p7zip mapping"
+
+  res=$(map_package fedora mysql-client)
+  [[ "$res" == "mariadb" ]] || fail "Expected mariadb for fedora, got $res"
+  pass "fedora mysql-client mapping"
+
+  res=$(map_package fedora docker-compose)
+  [[ "$res" == "docker-compose" ]] || fail "Expected docker-compose for fedora, got $res"
+  pass "fedora docker-compose mapping"
+
+  res=$(map_package fedora docker-buildx)
+  [[ "$res" == "docker-buildx" ]] || fail "Expected docker-buildx for fedora, got $res"
+  pass "fedora docker-buildx mapping"
+
   # Test missing map (should return 1)
   if map_package ubuntu kubectl >/dev/null 2>&1; then
     fail "Expected map_package ubuntu kubectl to fail"
   else
     pass "ubuntu kubectl skips correctly"
   fi
+}
+
+test_manual_package_satisfaction() {
+  echo "--- Running test_manual_package_satisfaction ---"
+
+  (
+    have() {
+      [[ "$1" == "wget" || "$1" == "starship" || "$1" == "7zz" ]]
+    }
+
+    package_requirement_satisfied wget2-wget || fail "Expected wget2-wget to be satisfied by wget command"
+    package_requirement_satisfied starship || fail "Expected starship to be satisfied by starship command"
+    package_requirement_satisfied 7zip || fail "Expected 7zip to be satisfied by 7zz command"
+
+    if package_requirement_satisfied neovim; then
+      fail "Expected neovim package satisfaction check to remain unsupported"
+    fi
+  )
+
+  pass "manual package satisfaction works"
+}
+
+test_terminal_font_configuration() {
+  echo "--- Running test_terminal_font_configuration ---"
+
+  grep -q 'font_family JetBrainsMono Nerd Font Mono' "$REPO_ROOT/config/home/.config/kitty/kitty.conf" \
+    || fail "Expected Kitty to use JetBrainsMono Nerd Font Mono"
+  grep -q 'family = "JetBrainsMono Nerd Font Mono"' "$REPO_ROOT/config/home/.config/alacritty/alacritty.toml" \
+    || fail "Expected Alacritty to use JetBrainsMono Nerd Font Mono"
+  grep -q 'DefaultProfile=Shell.profile' "$REPO_ROOT/config/home/.config/konsolerc" \
+    || fail "Expected Konsole default profile to be Shell.profile"
+  grep -q 'Font=JetBrainsMono Nerd Font Mono,12,-1,5,50,0,0,0,0,0' "$REPO_ROOT/config/home/.local/share/konsole/Shell.profile" \
+    || fail "Expected Konsole profile to use JetBrainsMono Nerd Font Mono"
+
+  pass "terminal font configuration is consistent"
+}
+
+test_reconcile_fedora_conflicts() {
+  echo "--- Running test_reconcile_fedora_conflicts ---"
+
+  local -a reconciled=()
+  mapfile -t reconciled < <(reconcile_packages fedora moby-engine podman podman-docker buildah)
+
+  [[ " ${reconciled[*]} " == *" moby-engine "* ]] || fail "Expected moby-engine to be kept"
+  [[ " ${reconciled[*]} " == *" podman "* ]] || fail "Expected podman to be kept"
+  [[ " ${reconciled[*]} " == *" buildah "* ]] || fail "Expected buildah to be kept"
+  [[ " ${reconciled[*]} " != *" podman-docker "* ]] || fail "Expected podman-docker to be dropped when moby-engine is selected"
+
+  pass "fedora package conflicts are reconciled"
 }
 
 # --- Test: failure_aggregations ---
@@ -346,6 +415,9 @@ test_install_jetbrains_toolbox_optional_failure() {
 test_install_script_parses
 test_distro_detection
 test_package_resolution
+test_manual_package_satisfaction
+test_terminal_font_configuration
+test_reconcile_fedora_conflicts
 test_failure_aggregations
 test_collect_packages_records_unmapped_required
 test_collect_packages_records_unmapped_optional

@@ -120,7 +120,8 @@ collect_packages() {
     done < <(package_group gnome)
   fi
 
-  dedupe_packages "${selected[@]}"
+  mapfile -t selected < <(dedupe_packages "${selected[@]}")
+  reconcile_packages "$distro" "${selected[@]}"
 }
 
 bootstrap_selected_vendors() {
@@ -241,6 +242,8 @@ filter_arch_packages() {
   for pkg in "$@"; do
     if pacman -Si "$pkg" >/dev/null 2>&1; then
       filtered+=("$pkg")
+    elif package_requirement_satisfied "$pkg"; then
+      log "Using existing command for unavailable package: $pkg"
     else
       warn "Skipping unavailable package: $pkg"
       record_required_pkg_failure "$pkg"
@@ -253,6 +256,8 @@ filter_fedora_packages() {
   for pkg in "$@"; do
     if dnf info "$pkg" >/dev/null 2>&1; then
       filtered+=("$pkg")
+    elif package_requirement_satisfied "$pkg"; then
+      log "Using existing command for unavailable package: $pkg"
     else
       warn "Skipping unavailable package: $pkg"
       record_required_pkg_failure "$pkg"
@@ -265,6 +270,8 @@ filter_apt_packages() {
   for pkg in "$@"; do
     if apt-cache show "$pkg" >/dev/null 2>&1; then
       filtered+=("$pkg")
+    elif package_requirement_satisfied "$pkg"; then
+      log "Using existing command for unavailable package: $pkg"
     else
       warn "Skipping unavailable package: $pkg"
       record_required_pkg_failure "$pkg"
@@ -277,6 +284,8 @@ filter_zypper_packages() {
   for pkg in "$@"; do
     if zypper --non-interactive search --match-exact "$pkg" | grep -Eq "^[[:space:]]*[ivp][[:space:]]*\|"; then
       filtered+=("$pkg")
+    elif package_requirement_satisfied "$pkg"; then
+      log "Using existing command for unavailable package: $pkg"
     else
       warn "Skipping unavailable package: $pkg"
       record_required_pkg_failure "$pkg"

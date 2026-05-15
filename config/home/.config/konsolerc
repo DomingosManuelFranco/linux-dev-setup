@@ -1,0 +1,8 @@
+[Desktop Entry]
+DefaultProfile=Shell.profile
+
+[General]
+ConfigVersion=1
+
+[MainWindow]
+ToolBarsMovable=Enabled

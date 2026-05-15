@@ -141,6 +141,84 @@ EOF
   esac
 }
 
+package_requirement_satisfied() {
+  local pkg="$1"
+
+  case "$pkg" in
+    wget|wget1-wget|wget2-wget|wget1|wget2)
+      have wget
+      ;;
+    starship)
+      have starship
+      ;;
+    p7zip|p7zip-full|7zip|7zip-reduced|7zip-standalone|7zip-standalone-all)
+      have 7zz || have 7z
+      ;;
+    community-mysql|mariadb|mariadb-client|mariadb-clients|default-mysql-client)
+      have mysql || have mariadb
+      ;;
+    redis)
+      have redis-cli
+      ;;
+    docker-compose|docker-compose-plugin|docker-compose-switch)
+      have docker-compose || docker compose version >/dev/null 2>&1
+      ;;
+    docker-buildx|docker-buildx-plugin)
+      docker buildx version >/dev/null 2>&1
+      ;;
+    kubernetes-client|kubectl)
+      have kubectl
+      ;;
+    helm)
+      have helm
+      ;;
+    kustomize)
+      have kustomize
+      ;;
+    terraform)
+      have terraform
+      ;;
+    packer)
+      have packer
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+reconcile_packages() {
+  local distro="$1"
+  shift
+
+  case "$distro" in
+    fedora)
+      local -a kept=()
+      local pkg
+      local has_docker=0
+
+      for pkg in "$@"; do
+        if [[ "$pkg" == "moby-engine" ]]; then
+          has_docker=1
+          break
+        fi
+      done
+
+      for pkg in "$@"; do
+        if [[ "$pkg" == "podman-docker" && "$has_docker" -eq 1 ]]; then
+          continue
+        fi
+        kept+=("$pkg")
+      done
+
+      printf '%s\n' "${kept[@]}"
+      ;;
+    *)
+      printf '%s\n' "$@"
+      ;;
+  esac
+}
+
 map_package() {
   local distro="$1"
   local pkg="$2"
@@ -227,7 +305,7 @@ map_package() {
     fedora:git) echo git ;;
     fedora:neovim) echo neovim ;;
     fedora:curl) echo curl ;;
-    fedora:wget) echo wget ;;
+    fedora:wget) echo wget2-wget ;;
     fedora:unzip) echo unzip ;;
     fedora:zip) echo zip ;;
     fedora:tar) echo tar ;;
@@ -251,7 +329,7 @@ map_package() {
     fedora:rsync) echo rsync ;;
     fedora:wl-clipboard) echo wl-clipboard ;;
     fedora:xclip) echo xclip ;;
-    fedora:p7zip) echo p7zip ;;
+    fedora:p7zip) echo 7zip ;;
     fedora:xdg-utils) echo xdg-utils ;;
     fedora:flatpak) echo flatpak ;;
     fedora:font-jetbrains-mono-nerd) echo jetbrains-mono-fonts-all ;;
@@ -268,7 +346,7 @@ map_package() {
     fedora:httpie) echo httpie ;;
     fedora:sqlite) echo sqlite ;;
     fedora:postgresql-client) echo postgresql ;;  # fedora has no separate client package; psql is in postgresql
-    fedora:mysql-client) echo community-mysql ;;
+    fedora:mysql-client) echo mariadb ;;
     fedora:redis-tools) echo redis ;;
     fedora:mongosh) return 1 ;;  # installed via vendor step
     fedora:mkcert) return 1 ;;  # installed via vendor step
@@ -277,8 +355,8 @@ map_package() {
     fedora:scrcpy) echo scrcpy ;;
     fedora:jdk21) echo java-21-openjdk ;;
     fedora:docker) echo moby-engine ;;
-    fedora:docker-compose) echo docker-compose-plugin ;;  # v2 plugin; legacy v1 'docker-compose' is deprecated
-    fedora:docker-buildx) echo docker-buildx-plugin ;;
+    fedora:docker-compose) echo docker-compose ;;
+    fedora:docker-buildx) echo docker-buildx ;;
     fedora:podman) echo podman ;;
     fedora:podman-docker) echo podman-docker ;;
     fedora:buildah) echo buildah ;;
