@@ -193,6 +193,36 @@ test_terminal_font_configuration() {
   pass "terminal font configuration is consistent"
 }
 
+test_neovim_configuration() {
+  echo "--- Running test_neovim_configuration ---"
+
+  grep -q 'folke/lazy.nvim' "$REPO_ROOT/config/home/.config/nvim/lua/config/lazy.lua" \
+    || fail "Expected Neovim to bootstrap lazy.nvim"
+  grep -q 'tokyonight.nvim' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/ui.lua" \
+    || fail "Expected Neovim UI config to include tokyonight"
+  grep -q 'saghen/blink.cmp' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/lsp.lua" \
+    || fail "Expected Neovim LSP config to include blink.cmp"
+  grep -q 'christoomey/vim-tmux-navigator' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/editor.lua" \
+    || fail "Expected Neovim editor config to include tmux navigation"
+
+  pass "neovim configuration is present"
+}
+
+test_tmux_plugin_configuration() {
+  echo "--- Running test_tmux_plugin_configuration ---"
+
+  grep -q "tmux-plugins/tpm" "$REPO_ROOT/config/home/.tmux.conf" \
+    || fail "Expected tmux config to include TPM"
+  grep -q "tmux-plugins/tmux-resurrect" "$REPO_ROOT/config/home/.tmux.conf" \
+    || fail "Expected tmux config to include tmux-resurrect"
+  grep -q "christoomey/vim-tmux-navigator" "$REPO_ROOT/config/home/.tmux.conf" \
+    || fail "Expected tmux config to include vim-tmux-navigator"
+  grep -q "run '~/.tmux/plugins/tpm/tpm'" "$REPO_ROOT/config/home/.tmux.conf" \
+    || fail "Expected tmux config to initialize TPM"
+
+  pass "tmux plugin configuration is present"
+}
+
 test_reconcile_fedora_conflicts() {
   echo "--- Running test_reconcile_fedora_conflicts ---"
 
@@ -482,6 +512,8 @@ test_distro_detection
 test_package_resolution
 test_manual_package_satisfaction
 test_terminal_font_configuration
+test_neovim_configuration
+test_tmux_plugin_configuration
 test_reconcile_fedora_conflicts
 test_failure_aggregations
 test_collect_packages_records_unmapped_required

@@ -156,6 +156,20 @@ install_yq() {
   chmod 0755 "$HOME/.local/bin/yq"
 }
 
+install_tpm() {
+  local plugin_dir="$HOME/.tmux/plugins/tpm"
+
+  if [[ -d "$plugin_dir/.git" ]]; then
+    git -C "$plugin_dir" pull --ff-only >/dev/null 2>&1 || warn "TPM update failed"
+    return 0
+  fi
+
+  log "Installing tmux plugin manager"
+  mkdir -p "$(dirname "$plugin_dir")"
+  git clone --depth 1 https://github.com/tmux-plugins/tpm "$plugin_dir" >/dev/null 2>&1 \
+    || warn "TPM install failed"
+}
+
 install_jetbrains_mono_nerd_font() {
   if fc-list 2>/dev/null | grep -q "JetBrainsMono Nerd Font Mono"; then
     return 0
@@ -735,6 +749,7 @@ bootstrap_role_vendors() {
   install_rustup_if_missing
   install_fzf_tab
   install_jetbrains_mono_nerd_font
+  install_tpm
   install_yq
 
   case "$1" in
