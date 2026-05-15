@@ -193,6 +193,19 @@ test_terminal_font_configuration() {
   pass "terminal font configuration is consistent"
 }
 
+test_gnome_terminal_configuration() {
+  echo "--- Running test_gnome_terminal_configuration ---"
+
+  grep -q 'org.gnome.Terminal.ProfilesList' "$REPO_ROOT/scripts/apply-gnome.sh" \
+    || fail "Expected GNOME apply script to configure GNOME Terminal when available"
+  grep -q "JetBrainsMono Nerd Font Mono 12" "$REPO_ROOT/scripts/apply-gnome.sh" \
+    || fail "Expected GNOME apply script to set GNOME Terminal font"
+  grep -q "org.gnome.Console.desktop org.gnome.Terminal.desktop kgx.desktop gnome-terminal.desktop" "$REPO_ROOT/scripts/apply-gnome.sh" \
+    || fail "Expected GNOME apply script to detect GNOME terminal desktop entries"
+
+  pass "gnome terminal configuration is present"
+}
+
 test_neovim_configuration() {
   echo "--- Running test_neovim_configuration ---"
 
@@ -512,6 +525,7 @@ test_distro_detection
 test_package_resolution
 test_manual_package_satisfaction
 test_terminal_font_configuration
+test_gnome_terminal_configuration
 test_neovim_configuration
 test_tmux_plugin_configuration
 test_reconcile_fedora_conflicts

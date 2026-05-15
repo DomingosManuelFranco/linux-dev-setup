@@ -60,35 +60,62 @@ install_gnome_extensions() {
 gsettings set org.gnome.desktop.interface color-scheme prefer-dark || true
 gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 11' || true
 
-resolve_terminal() {
-  if command -v kitty >/dev/null 2>&1; then
-    printf 'kitty|kitty.desktop|%s\n' "$(command -v kitty)"
-    return 0
-  fi
+desktop_file_exists() {
+  local desktop_file="$1"
+  [[ -f "/usr/share/applications/$desktop_file" || -f "$HOME/.local/share/applications/$desktop_file" ]]
+}
 
-  if command -v alacritty >/dev/null 2>&1; then
-    printf 'alacritty|Alacritty.desktop|%s\n' "$(command -v alacritty)"
-    return 0
-  fi
+resolve_gnome_terminal_desktop() {
+  local desktop_file
+  for desktop_file in org.gnome.Console.desktop org.gnome.Terminal.desktop kgx.desktop gnome-terminal.desktop; do
+    if desktop_file_exists "$desktop_file"; then
+      printf '%s\n' "$desktop_file"
+      return 0
+    fi
+  done
 
   return 1
 }
 
-# Set default terminal: GNOME 42+ removed the old key; use xdg-mime and update-alternatives
-if terminal_info="$(resolve_terminal)"; then
-  IFS='|' read -r terminal_exec terminal_desktop terminal_bin <<< "$terminal_info"
+configure_gnome_terminal() {
+  if ! command -v gsettings >/dev/null 2>&1; then
+    return 0
+  fi
 
-  if command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --set x-terminal-emulator "$terminal_bin" >/dev/null 2>&1 || true
+  if ! gsettings list-schemas | grep -qx 'org.gnome.Terminal.ProfilesList'; then
+    return 0
   fi
-  if command -v xdg-mime >/dev/null 2>&1; then
-    xdg-mime default "$terminal_desktop" x-scheme-handler/terminal >/dev/null 2>&1 || true
+
+  local profile_id profile_path
+  profile_id="$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d "'")"
+  if [[ -z "$profile_id" ]]; then
+    return 0
   fi
-  # Also set the GNOME 40-41 key as a best-effort fallback (silently fails on 42+)
-  gsettings set org.gnome.desktop.default-applications.terminal exec "$terminal_exec" 2>/dev/null || true
-else
-  warn "No supported repo-managed terminal found; skipping default terminal configuration"
-fi
+
+  profile_path="/org/gnome/terminal/legacy/profiles:/:${profile_id}/"
+
+  gsettings set org.gnome.Terminal.Legacy.Settings theme-variant 'dark' || true
+  gsettings set org.gnome.Terminal.Legacy.Settings confirm-close false || true
+  gsettings set org.gnome.Terminal.Legacy.Settings new-terminal-mode 'window' || true
+  gsettings set org.gnome.Terminal.Legacy.Settings tab-policy 'automatic' || true
+
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" visible-name 'DankNight' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" use-system-font false || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" font 'JetBrainsMono Nerd Font Mono 12' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" use-theme-colors false || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" foreground-color '#E2E7EA' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" background-color '#12161A' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" bold-color-same-as-fg true || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" cursor-shape 'block' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" cursor-blink-mode 'on' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" scrollbar-policy 'never' || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" scrollback-lines 3000 || true
+  gsettings set "org.gnome.Terminal.Legacy.Profile:${profile_path}" palette "['#12161A', '#F69B6E', '#6BD671', '#FFF372', '#7ACBB9', '#266355', '#8FD6C6', '#D3E0DD', '#808B88', '#FFBF9F', '#A5FFAB', '#FFF7A5', '#A9EBDC', '#C3FFF1', '#D8FFF6', '#F8FFFD']" || true
+
+  log 'Configured GNOME Terminal profile'
+}
+
+configure_gnome_terminal
 
 # Build a dynamic favorites list based on what is actually installed
 build_favorites() {
@@ -104,8 +131,7 @@ build_favorites() {
   done
   [[ -n "$nautilus_desktop" ]] && favs+=("$nautilus_desktop")
 
-  if terminal_info="$(resolve_terminal)"; then
-    IFS='|' read -r _terminal_exec terminal_desktop _terminal_bin <<< "$terminal_info"
+  if terminal_desktop="$(resolve_gnome_terminal_desktop)"; then
     favs+=("$terminal_desktop")
   fi
 
