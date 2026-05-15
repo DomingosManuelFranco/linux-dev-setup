@@ -402,13 +402,23 @@ setup_github() {
 
     local pub_blob
     pub_blob="$(awk '{print $2}' "${ssh_key}.pub" 2>/dev/null || true)"
-    if [[ -n "$pub_blob" ]] && gh ssh-key list 2>/dev/null | grep -qF "$pub_blob"; then
+    local ssh_key_list_output
+    ssh_key_list_output="$(gh ssh-key list 2>&1 || true)"
+    if [[ -n "$pub_blob" ]] && grep -qF "$pub_blob" <<< "$ssh_key_list_output"; then
       log "SSH public key already on GitHub; skipping upload"
+    elif grep -q "admin:public_key" <<< "$ssh_key_list_output"; then
+      record_warning "GitHub token lacks admin:public_key scope; skipping SSH key upload. Run: gh auth refresh -h github.com -s admin:public_key"
+      warn "GitHub token lacks admin:public_key scope; skipping SSH key upload"
     else
-      if ! gh ssh-key add "${ssh_key}.pub" --title "$key_title"; then
-        record_setup_failure "Could not upload SSH key to GitHub"
-      else
+      local ssh_key_add_output
+      ssh_key_add_output="$(gh ssh-key add "${ssh_key}.pub" --title "$key_title" 2>&1 || true)"
+      if [[ -z "$ssh_key_add_output" ]]; then
         log "SSH public key uploaded to GitHub as '$key_title'"
+      elif grep -q "admin:public_key" <<< "$ssh_key_add_output"; then
+        record_warning "GitHub token lacks admin:public_key scope; skipping SSH key upload. Run: gh auth refresh -h github.com -s admin:public_key"
+        warn "GitHub token lacks admin:public_key scope; skipping SSH key upload"
+      else
+        record_setup_failure "Could not upload SSH key to GitHub"
       fi
     fi
   fi

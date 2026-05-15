@@ -185,6 +185,8 @@ test_terminal_font_configuration() {
     || fail "Expected Alacritty to use JetBrainsMono Nerd Font Mono"
   grep -q 'DefaultProfile=Shell.profile' "$REPO_ROOT/config/home/.config/konsolerc" \
     || fail "Expected Konsole default profile to be Shell.profile"
+  grep -q 'ColorScheme=DankNight' "$REPO_ROOT/config/home/.local/share/konsole/Shell.profile" \
+    || fail "Expected Konsole profile to use DankNight color scheme"
   grep -q 'Font=JetBrainsMono Nerd Font Mono,12,-1,5,50,0,0,0,0,0' "$REPO_ROOT/config/home/.local/share/konsole/Shell.profile" \
     || fail "Expected Konsole profile to use JetBrainsMono Nerd Font Mono"
 
@@ -382,6 +384,69 @@ test_setup_github_non_interactive_token() {
   pass "github token auth non-interactive"
 }
 
+test_setup_github_missing_public_key_scope_warns() {
+  echo "--- Running test_setup_github_missing_public_key_scope_warns ---"
+
+  local original_home="$HOME"
+  local original_ssh_auth_sock="${SSH_AUTH_SOCK:-}"
+  local fake_home="/tmp/fake_github_scope_home_$$"
+  mkdir -p "$fake_home/.ssh"
+  export HOME="$fake_home"
+  export NON_INTERACTIVE=1
+  export GH_TOKEN="token-123"
+  export SSH_AUTH_SOCK="/tmp/fake_github_scope_agent_$$.sock"
+
+  git config --global user.email "test@example.com"
+  printf 'private\n' > "$fake_home/.ssh/id_ed25519"
+  printf 'ssh-ed25519 AAAATESTKEY test@example.com\n' > "$fake_home/.ssh/id_ed25519.pub"
+
+  gh() {
+    if [[ "$1" == "auth" && "$2" == "status" ]]; then
+      return 0
+    fi
+
+    if [[ "$1" == "api" && "$2" == "user" ]]; then
+      printf 'tester\n'
+      return 0
+    fi
+
+    if [[ "$1" == "ssh-key" && "$2" == "list" ]]; then
+      printf 'HTTP 404: Not Found\nThis API operation needs the "admin:public_key" scope.\n'
+      return 1
+    fi
+
+    if [[ "$1" == "ssh-key" && "$2" == "add" ]]; then
+      printf 'This API operation needs the "admin:public_key" scope.\n'
+      return 1
+    fi
+
+    return 1
+  }
+
+  ssh-add() {
+    return 0
+  }
+
+  FAILED_SETUP=()
+  WARNINGS=()
+
+  setup_github >/dev/null 2>&1
+
+  [[ ${#FAILED_SETUP[@]} -eq 0 ]] || fail "Expected missing admin:public_key scope to be non-fatal"
+  [[ " ${WARNINGS[*]} " == *"admin:public_key scope"* ]] || fail "Expected missing scope warning to be recorded"
+
+  unset -f gh ssh-add
+  rm -rf "$fake_home"
+  export HOME="$original_home"
+  if [[ -n "$original_ssh_auth_sock" ]]; then
+    export SSH_AUTH_SOCK="$original_ssh_auth_sock"
+  else
+    unset SSH_AUTH_SOCK
+  fi
+  unset GH_TOKEN
+  pass "github missing public key scope warns"
+}
+
 test_install_jetbrains_toolbox_optional_failure() {
   echo "--- Running test_install_jetbrains_toolbox_optional_failure ---"
 
@@ -423,6 +488,7 @@ test_collect_packages_records_unmapped_required
 test_collect_packages_records_unmapped_optional
 test_setup_git_non_interactive
 test_setup_github_non_interactive_token
+test_setup_github_missing_public_key_scope_warns
 test_install_jetbrains_toolbox_optional_failure
 
 echo "All tests passed."
