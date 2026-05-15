@@ -198,11 +198,11 @@ test_neovim_configuration() {
 
   grep -q 'folke/lazy.nvim' "$REPO_ROOT/config/home/.config/nvim/lua/config/lazy.lua" \
     || fail "Expected Neovim to bootstrap lazy.nvim"
-  grep -q 'tokyonight.nvim' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/ui.lua" \
-    || fail "Expected Neovim UI config to include tokyonight"
+  grep -q 'catppuccin/nvim' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/ui.lua" \
+    || fail "Expected Neovim UI config to include catppuccin"
   grep -q 'saghen/blink.cmp' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/lsp.lua" \
     || fail "Expected Neovim LSP config to include blink.cmp"
-  grep -q 'christoomey/vim-tmux-navigator' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/editor.lua" \
+  grep -q 'christoomey/vim-tmux-navigator' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/tmux.lua" \
     || fail "Expected Neovim editor config to include tmux navigation"
 
   pass "neovim configuration is present"

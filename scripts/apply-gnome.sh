@@ -60,18 +60,34 @@ install_gnome_extensions() {
 gsettings set org.gnome.desktop.interface color-scheme prefer-dark || true
 gsettings set org.gnome.desktop.interface monospace-font-name 'JetBrainsMono Nerd Font 11' || true
 
+resolve_terminal() {
+  if command -v kitty >/dev/null 2>&1; then
+    printf 'kitty|kitty.desktop|%s\n' "$(command -v kitty)"
+    return 0
+  fi
+
+  if command -v alacritty >/dev/null 2>&1; then
+    printf 'alacritty|Alacritty.desktop|%s\n' "$(command -v alacritty)"
+    return 0
+  fi
+
+  return 1
+}
+
 # Set default terminal: GNOME 42+ removed the old key; use xdg-mime and update-alternatives
-if command -v kitty >/dev/null 2>&1; then
+if terminal_info="$(resolve_terminal)"; then
+  IFS='|' read -r terminal_exec terminal_desktop terminal_bin <<< "$terminal_info"
+
   if command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --set x-terminal-emulator "$(command -v kitty)" >/dev/null 2>&1 || true
+    update-alternatives --set x-terminal-emulator "$terminal_bin" >/dev/null 2>&1 || true
   fi
   if command -v xdg-mime >/dev/null 2>&1; then
-    xdg-mime default kitty.desktop x-scheme-handler/terminal >/dev/null 2>&1 || true
+    xdg-mime default "$terminal_desktop" x-scheme-handler/terminal >/dev/null 2>&1 || true
   fi
   # Also set the GNOME 40-41 key as a best-effort fallback (silently fails on 42+)
-  gsettings set org.gnome.desktop.default-applications.terminal exec 'kitty' 2>/dev/null || true
+  gsettings set org.gnome.desktop.default-applications.terminal exec "$terminal_exec" 2>/dev/null || true
 else
-  warn "kitty not found; skipping default terminal configuration"
+  warn "No supported repo-managed terminal found; skipping default terminal configuration"
 fi
 
 # Build a dynamic favorites list based on what is actually installed
@@ -88,7 +104,10 @@ build_favorites() {
   done
   [[ -n "$nautilus_desktop" ]] && favs+=("$nautilus_desktop")
 
-  command -v kitty >/dev/null 2>&1 && favs+=('kitty.desktop')
+  if terminal_info="$(resolve_terminal)"; then
+    IFS='|' read -r _terminal_exec terminal_desktop _terminal_bin <<< "$terminal_info"
+    favs+=("$terminal_desktop")
+  fi
 
   if command -v code >/dev/null 2>&1; then
     favs+=('code.desktop')
