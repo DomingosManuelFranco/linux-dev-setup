@@ -246,6 +246,42 @@ test_zypper_capability_resolution() {
   pass "zypper capability resolution works"
 }
 
+test_fastfetch_template_configuration() {
+  echo "--- Running test_fastfetch_template_configuration ---"
+
+  local template="$REPO_ROOT/config/templates/.config/fastfetch/config.jsonc.tmpl"
+
+  [[ -f "$template" ]] || fail "Expected fastfetch template to exist"
+  grep -q '@@FASTFETCH_LOGO_SOURCE@@' "$template" || fail "Expected fastfetch template to include distro logo placeholder"
+  grep -q '@@FASTFETCH_LOGO_COLOR@@' "$template" || fail "Expected fastfetch template to include distro color placeholder"
+
+  pass "fastfetch template configuration is present"
+}
+
+test_fastfetch_distro_logo_selection() {
+  echo "--- Running test_fastfetch_distro_logo_selection ---"
+
+  detect_distro() { printf 'arch\n'; }
+  [[ "$(fastfetch_logo_source_for_distro)" == "arch" ]] || fail "Expected arch fastfetch logo"
+  [[ "$(fastfetch_logo_color_for_distro)" == "#1793d1" ]] || fail "Expected arch fastfetch color"
+
+  detect_distro() { printf 'fedora\n'; }
+  [[ "$(fastfetch_logo_source_for_distro)" == "fedora" ]] || fail "Expected fedora fastfetch logo"
+  [[ "$(fastfetch_logo_color_for_distro)" == "#51a2da" ]] || fail "Expected fedora fastfetch color"
+
+  detect_distro() { printf 'ubuntu\n'; }
+  [[ "$(fastfetch_logo_source_for_distro)" == "ubuntu" ]] || fail "Expected ubuntu fastfetch logo"
+  [[ "$(fastfetch_logo_color_for_distro)" == "#e95420" ]] || fail "Expected ubuntu fastfetch color"
+
+  detect_distro() { printf 'opensuse\n'; }
+  [[ "$(fastfetch_logo_source_for_distro)" == "opensuse" ]] || fail "Expected opensuse fastfetch logo"
+  [[ "$(fastfetch_logo_color_for_distro)" == "#73ba25" ]] || fail "Expected opensuse fastfetch color"
+
+  unset -f detect_distro
+
+  pass "fastfetch distro logo selection works"
+}
+
 test_terminal_font_configuration() {
   echo "--- Running test_terminal_font_configuration ---"
 
@@ -630,6 +666,8 @@ test_package_resolution
 test_manual_package_satisfaction
 test_zypper_search_parsing
 test_zypper_capability_resolution
+test_fastfetch_template_configuration
+test_fastfetch_distro_logo_selection
 test_terminal_font_configuration
 test_gnome_terminal_configuration
 test_neovim_configuration

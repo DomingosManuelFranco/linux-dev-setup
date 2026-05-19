@@ -169,10 +169,14 @@ link_dotfiles() {
 
 render_templates() {
   local templates_root="$REPO_ROOT/config/templates"
+  local fastfetch_logo_source fastfetch_logo_color
 
   if [[ ! -d "$templates_root" ]]; then
     return 0
   fi
+
+  fastfetch_logo_source="$(fastfetch_logo_source_for_distro)"
+  fastfetch_logo_color="$(fastfetch_logo_color_for_distro)"
 
   while IFS= read -r -d '' template; do
     local rel target_dir target
@@ -181,15 +185,74 @@ render_templates() {
     target="$HOME/${rel%.tmpl}"
 
     mkdir -p "$target_dir"
+    if [[ -L "$target" ]]; then
+      rm -f "$target"
+    fi
     backup_if_conflict "$target"
 
     sed \
       -e "s|@@HOME@@|$HOME|g" \
       -e "s|@@USER@@|${USER:-}|g" \
+      -e "s|@@FASTFETCH_LOGO_SOURCE@@|$fastfetch_logo_source|g" \
+      -e "s|@@FASTFETCH_LOGO_COLOR@@|$fastfetch_logo_color|g" \
       "$template" > "$target"
 
     log "Rendered $target"
   done < <(find "$templates_root" -type f -name '*.tmpl' -print0)
+}
+
+fastfetch_logo_source_for_distro() {
+  local distro
+
+  distro="$(detect_distro 2>/dev/null || true)"
+
+  case "$distro" in
+    arch)
+      printf 'arch\n'
+      ;;
+    fedora)
+      printf 'fedora\n'
+      ;;
+    ubuntu|pikaos)
+      printf 'ubuntu\n'
+      ;;
+    debian)
+      printf 'debian\n'
+      ;;
+    opensuse)
+      printf 'opensuse\n'
+      ;;
+    *)
+      printf 'linux\n'
+      ;;
+  esac
+}
+
+fastfetch_logo_color_for_distro() {
+  local distro
+
+  distro="$(detect_distro 2>/dev/null || true)"
+
+  case "$distro" in
+    arch)
+      printf '#1793d1\n'
+      ;;
+    fedora)
+      printf '#51a2da\n'
+      ;;
+    ubuntu|pikaos)
+      printf '#e95420\n'
+      ;;
+    debian)
+      printf '#d70a53\n'
+      ;;
+    opensuse)
+      printf '#73ba25\n'
+      ;;
+    *)
+      printf '#89b4fa\n'
+      ;;
+  esac
 }
 
 enable_systemd_units() {
