@@ -187,6 +187,17 @@ package_requirement_satisfied() {
   esac
 }
 
+package_managed_via_vendor() {
+  case "$1" in
+    uv|rustup|mkcert|mongosh|hadolint)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 reconcile_packages() {
   local distro="$1"
   shift

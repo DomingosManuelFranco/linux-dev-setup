@@ -29,6 +29,8 @@ collect_packages_for_test() {
       [[ -z "$pkg" ]] && continue
       if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
         [[ -n "$mapped" ]] && selected+=("$mapped")
+      elif package_managed_via_vendor "$pkg"; then
+        continue
       else
         record_required_pkg_failure "$pkg"
       fi
@@ -40,6 +42,8 @@ collect_packages_for_test() {
       [[ -z "$pkg" ]] && continue
       if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
         [[ -n "$mapped" ]] && selected+=("$mapped")
+      elif package_managed_via_vendor "$pkg"; then
+        continue
       else
         record_optional_failure "$pkg"
       fi
@@ -162,6 +166,24 @@ test_package_resolution() {
   else
     pass "ubuntu kubectl skips correctly"
   fi
+
+  res=$(map_package opensuse uv 2>/dev/null || true)
+  [[ -z "$res" ]] || fail "Expected opensuse uv to be vendor-managed, got $res"
+  package_managed_via_vendor uv || fail "Expected uv to be vendor-managed"
+
+  res=$(map_package opensuse mkcert 2>/dev/null || true)
+  [[ -z "$res" ]] || fail "Expected opensuse mkcert to be vendor-managed, got $res"
+  package_managed_via_vendor mkcert || fail "Expected mkcert to be vendor-managed"
+
+  res=$(map_package opensuse mongosh 2>/dev/null || true)
+  [[ -z "$res" ]] || fail "Expected opensuse mongosh to be vendor-managed, got $res"
+  package_managed_via_vendor mongosh || fail "Expected mongosh to be vendor-managed"
+
+  res=$(map_package opensuse hadolint 2>/dev/null || true)
+  [[ -z "$res" ]] || fail "Expected opensuse hadolint to be vendor-managed, got $res"
+  package_managed_via_vendor hadolint || fail "Expected hadolint to be vendor-managed"
+
+  pass "opensuse vendor-managed package mapping"
 }
 
 test_manual_package_satisfaction() {
@@ -313,6 +335,39 @@ test_collect_packages_records_unmapped_optional() {
   [[ " ${FAILED_OPTIONAL_GUI[*]} " == *" jetbrains-toolbox "* ]] || fail "Expected jetbrains-toolbox to be recorded as optional failure"
 
   pass "unmapped optional packages are recorded"
+}
+
+test_collect_packages_skips_vendor_managed_required() {
+  echo "--- Running test_collect_packages_skips_vendor_managed_required ---"
+
+  FAILED_REQUIRED_PKGS=()
+  FAILED_OPTIONAL_GUI=()
+  ROLES=(base web devops)
+  INSTALL_OPTIONAL=0
+
+  collect_packages_for_test opensuse >/dev/null
+
+  [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" uv "* ]] || fail "Expected uv not to be recorded as required failure"
+  [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" mkcert "* ]] || fail "Expected mkcert not to be recorded as required failure"
+  [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" mongosh "* ]] || fail "Expected mongosh not to be recorded as required failure"
+  [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" hadolint "* ]] || fail "Expected hadolint not to be recorded as required failure"
+
+  pass "vendor-managed required packages are skipped"
+}
+
+test_collect_packages_skips_vendor_managed_optional() {
+  echo "--- Running test_collect_packages_skips_vendor_managed_optional ---"
+
+  FAILED_REQUIRED_PKGS=()
+  FAILED_OPTIONAL_GUI=()
+  ROLES=(base)
+  INSTALL_OPTIONAL=1
+
+  collect_packages_for_test opensuse >/dev/null
+
+  [[ " ${FAILED_OPTIONAL_GUI[*]} " == *" jetbrains-toolbox "* ]] || fail "Expected jetbrains-toolbox to remain an optional failure"
+
+  pass "vendor-managed optional handling stays intact"
 }
 
 test_setup_git_non_interactive() {
@@ -540,6 +595,8 @@ test_reconcile_fedora_conflicts
 test_failure_aggregations
 test_collect_packages_records_unmapped_required
 test_collect_packages_records_unmapped_optional
+test_collect_packages_skips_vendor_managed_required
+test_collect_packages_skips_vendor_managed_optional
 test_setup_git_non_interactive
 test_setup_github_non_interactive_token
 test_setup_github_missing_public_key_scope_warns

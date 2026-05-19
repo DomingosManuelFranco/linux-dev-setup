@@ -92,6 +92,8 @@ collect_packages() {
       [[ -z "$pkg" ]] && continue
       if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
         [[ -n "$mapped" ]] && selected+=("$mapped")
+      elif package_managed_via_vendor "$pkg"; then
+        continue
       else
         record_required_pkg_failure "$pkg"
       fi
@@ -103,6 +105,8 @@ collect_packages() {
       [[ -z "$pkg" ]] && continue
       if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
         [[ -n "$mapped" ]] && selected+=("$mapped")
+      elif package_managed_via_vendor "$pkg"; then
+        continue
       else
         record_optional_failure "$pkg"
       fi
@@ -114,6 +118,8 @@ collect_packages() {
       [[ -z "$pkg" ]] && continue
       if mapped="$(map_package "$distro" "$pkg" 2>/dev/null)"; then
         [[ -n "$mapped" ]] && selected+=("$mapped")
+      elif package_managed_via_vendor "$pkg"; then
+        continue
       else
         record_required_pkg_failure "$pkg"
       fi
