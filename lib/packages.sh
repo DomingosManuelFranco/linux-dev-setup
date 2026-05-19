@@ -253,7 +253,7 @@ map_package() {
     arch:rsync) echo rsync ;;
     arch:wl-clipboard) echo wl-clipboard ;;
     arch:xclip) echo xclip ;;
-    arch:p7zip) echo p7zip ;;
+    arch:p7zip) echo 7zip ;;
     arch:xdg-utils) echo xdg-utils ;;
     arch:flatpak) echo flatpak ;;
     arch:font-jetbrains-mono-nerd) echo ttf-jetbrains-mono-nerd ;;
@@ -264,7 +264,7 @@ map_package() {
     arch:gext) return 1 ;;
     arch:rustup) echo rustup ;;
     arch:uv) echo uv ;;
-    arch:python-neovim) echo python-neovim ;;
+    arch:python-neovim) echo python-pynvim ;;
     arch:ruby) echo ruby ;;
     arch:atuin) echo atuin ;;
     arch:httpie) echo httpie ;;

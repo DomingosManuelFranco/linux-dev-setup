@@ -136,6 +136,14 @@ test_package_resolution() {
   [[ "$res" == "7zip" ]] || fail "Expected 7zip for fedora, got $res"
   pass "fedora p7zip mapping"
 
+  res=$(map_package arch p7zip)
+  [[ "$res" == "7zip" ]] || fail "Expected 7zip for arch, got $res"
+  pass "arch p7zip mapping"
+
+  res=$(map_package arch python-neovim)
+  [[ "$res" == "python-pynvim" ]] || fail "Expected python-pynvim for arch, got $res"
+  pass "arch python-neovim mapping"
+
   res=$(map_package fedora mysql-client)
   [[ "$res" == "mariadb" ]] || fail "Expected mariadb for fedora, got $res"
   pass "fedora mysql-client mapping"
