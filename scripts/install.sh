@@ -287,9 +287,12 @@ filter_apt_packages() {
 
 filter_zypper_packages() {
   filtered=()
+  local resolved
   for pkg in "$@"; do
     if zypper --non-interactive search --match-exact "$pkg" 2>/dev/null | zypper_search_has_package "$pkg"; then
       filtered+=("$pkg")
+    elif resolved="$(zypper_resolve_package "$pkg" 2>/dev/null)"; then
+      filtered+=("$resolved")
     elif package_requirement_satisfied "$pkg"; then
       log "Using existing command for unavailable package: $pkg"
     else

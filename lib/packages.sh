@@ -216,6 +216,29 @@ zypper_search_has_package() {
   '
 }
 
+zypper_first_package_from_search() {
+  awk -F'|' '
+    NF >= 3 {
+      name = $2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name != "" && name != "Name") {
+        print name
+        exit
+      }
+    }
+  '
+}
+
+zypper_resolve_package() {
+  local pkg="$1"
+  local resolved
+
+  resolved="$(zypper --non-interactive search --provides --match-exact "$pkg" 2>/dev/null | zypper_first_package_from_search || true)"
+  [[ -n "$resolved" ]] || return 1
+
+  printf '%s\n' "$resolved"
+}
+
 reconcile_packages() {
   local distro="$1"
   shift

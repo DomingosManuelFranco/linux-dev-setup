@@ -187,6 +187,12 @@ test_package_resolution() {
   [[ -z "$res" ]] || fail "Expected opensuse font package to be vendor-managed, got $res"
   package_managed_via_vendor font-jetbrains-mono-nerd || fail "Expected font-jetbrains-mono-nerd to be vendor-managed"
 
+  res=$(map_package opensuse pipx)
+  [[ "$res" == "python3-pipx" ]] || fail "Expected python3-pipx for opensuse pipx, got $res"
+
+  res=$(map_package opensuse python-neovim)
+  [[ "$res" == "python3-neovim" ]] || fail "Expected python3-neovim for opensuse python-neovim, got $res"
+
   pass "opensuse vendor-managed package mapping"
 }
 
@@ -223,6 +229,21 @@ test_zypper_search_parsing() {
   fi
 
   pass "zypper search parsing works"
+}
+
+test_zypper_capability_resolution() {
+  echo "--- Running test_zypper_capability_resolution ---"
+
+  local output resolved
+  output=$'S | Name                     | Summary                         | Type\n--+--------------------------+---------------------------------+--------\n  | python311-pipx           | Python app installer            | package\n'
+  resolved=$(printf '%s' "$output" | zypper_first_package_from_search)
+  [[ "$resolved" == "python311-pipx" ]] || fail "Expected python311-pipx, got $resolved"
+
+  output=$'S | Name                     | Summary                         | Type\n--+--------------------------+---------------------------------+--------\n  | python311-neovim         | Python client for Neovim        | package\n'
+  resolved=$(printf '%s' "$output" | zypper_first_package_from_search)
+  [[ "$resolved" == "python311-neovim" ]] || fail "Expected python311-neovim, got $resolved"
+
+  pass "zypper capability resolution works"
 }
 
 test_terminal_font_configuration() {
@@ -608,6 +629,7 @@ test_distro_detection
 test_package_resolution
 test_manual_package_satisfaction
 test_zypper_search_parsing
+test_zypper_capability_resolution
 test_terminal_font_configuration
 test_gnome_terminal_configuration
 test_neovim_configuration
