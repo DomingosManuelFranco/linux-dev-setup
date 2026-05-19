@@ -183,6 +183,10 @@ test_package_resolution() {
   [[ -z "$res" ]] || fail "Expected opensuse hadolint to be vendor-managed, got $res"
   package_managed_via_vendor hadolint || fail "Expected hadolint to be vendor-managed"
 
+  res=$(map_package opensuse font-jetbrains-mono-nerd 2>/dev/null || true)
+  [[ -z "$res" ]] || fail "Expected opensuse font package to be vendor-managed, got $res"
+  package_managed_via_vendor font-jetbrains-mono-nerd || fail "Expected font-jetbrains-mono-nerd to be vendor-managed"
+
   pass "opensuse vendor-managed package mapping"
 }
 
@@ -204,6 +208,21 @@ test_manual_package_satisfaction() {
   )
 
   pass "manual package satisfaction works"
+}
+
+test_zypper_search_parsing() {
+  echo "--- Running test_zypper_search_parsing ---"
+
+  local output
+  output=$'S | Name                     | Summary                         | Type\n--+--------------------------+---------------------------------+--------\n  | zsh                      | Z shell                         | package\n'
+
+  printf '%s' "$output" | zypper_search_has_package zsh || fail "Expected zypper parser to detect zsh"
+
+  if printf '%s' "$output" | zypper_search_has_package neovim; then
+    fail "Expected zypper parser not to match unrelated package names"
+  fi
+
+  pass "zypper search parsing works"
 }
 
 test_terminal_font_configuration() {
@@ -351,6 +370,7 @@ test_collect_packages_skips_vendor_managed_required() {
   [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" mkcert "* ]] || fail "Expected mkcert not to be recorded as required failure"
   [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" mongosh "* ]] || fail "Expected mongosh not to be recorded as required failure"
   [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" hadolint "* ]] || fail "Expected hadolint not to be recorded as required failure"
+  [[ " ${FAILED_REQUIRED_PKGS[*]} " != *" font-jetbrains-mono-nerd "* ]] || fail "Expected font-jetbrains-mono-nerd not to be recorded as required failure"
 
   pass "vendor-managed required packages are skipped"
 }
@@ -587,6 +607,7 @@ test_install_script_parses
 test_distro_detection
 test_package_resolution
 test_manual_package_satisfaction
+test_zypper_search_parsing
 test_terminal_font_configuration
 test_gnome_terminal_configuration
 test_neovim_configuration

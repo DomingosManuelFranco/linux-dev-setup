@@ -288,7 +288,7 @@ filter_apt_packages() {
 filter_zypper_packages() {
   filtered=()
   for pkg in "$@"; do
-    if zypper --non-interactive search --match-exact "$pkg" | grep -Eq "^[[:space:]]*[ivp][[:space:]]*\|"; then
+    if zypper --non-interactive search --match-exact "$pkg" 2>/dev/null | zypper_search_has_package "$pkg"; then
       filtered+=("$pkg")
     elif package_requirement_satisfied "$pkg"; then
       log "Using existing command for unavailable package: $pkg"

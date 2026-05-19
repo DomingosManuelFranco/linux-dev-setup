@@ -189,13 +189,31 @@ package_requirement_satisfied() {
 
 package_managed_via_vendor() {
   case "$1" in
-    uv|rustup|mkcert|mongosh|hadolint)
+    uv|rustup|mkcert|mongosh|hadolint|font-jetbrains-mono-nerd)
       return 0
       ;;
     *)
       return 1
       ;;
   esac
+}
+
+zypper_search_has_package() {
+  local pkg="$1"
+
+  awk -F'|' -v pkg="$pkg" '
+    NF >= 3 {
+      name = $2
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name == pkg) {
+        found = 1
+        exit
+      }
+    }
+    END {
+      exit(found ? 0 : 1)
+    }
+  '
 }
 
 reconcile_packages() {
@@ -495,7 +513,7 @@ map_package() {
     opensuse:p7zip) echo 7zip ;;
     opensuse:xdg-utils) echo xdg-utils ;;
     opensuse:flatpak) echo flatpak ;;
-    opensuse:font-jetbrains-mono-nerd) echo google-jetbrains-mono-fonts ;;
+    opensuse:font-jetbrains-mono-nerd) return 1 ;;  # installed via vendor step
     opensuse:lazygit) echo lazygit ;;
     opensuse:kitty) echo kitty ;;
     opensuse:alacritty) echo alacritty ;;
