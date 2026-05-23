@@ -89,3 +89,5 @@ bindkey '^[[3~' delete-char
 
 # opencode
 export PATH=/home/woodzo/.opencode/bin:$PATH
+
+. "$HOME/.local/share/../bin/env"
