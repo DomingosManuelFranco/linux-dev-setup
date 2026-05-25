@@ -104,6 +104,10 @@ android-tools
 gradle
 scrcpy
 jdk21
+clang
+cmake
+ninja
+mesa-utils
 EOF
       ;;
     devops)
@@ -348,6 +352,10 @@ map_package() {
     arch:gradle) echo gradle ;;
     arch:scrcpy) echo scrcpy ;;
     arch:jdk21) echo jdk21-openjdk ;;
+    arch:clang) echo clang ;;
+    arch:cmake) echo cmake ;;
+    arch:ninja) echo ninja ;;
+    arch:mesa-utils) echo mesa-utils ;;
     arch:docker) echo docker ;;
     arch:docker-compose) echo docker-compose ;;
     arch:docker-buildx) echo docker-buildx ;;
@@ -424,6 +432,10 @@ map_package() {
     fedora:gradle) echo gradle ;;
     fedora:scrcpy) echo scrcpy ;;
     fedora:jdk21) echo java-21-openjdk ;;
+    fedora:clang) echo clang ;;
+    fedora:cmake) echo cmake ;;
+    fedora:ninja) echo ninja-build ;;
+    fedora:mesa-utils) echo mesa-demos ;;
     fedora:docker) echo moby-engine ;;
     fedora:docker-compose) echo docker-compose ;;
     fedora:docker-buildx) echo docker-buildx ;;
@@ -500,6 +512,10 @@ map_package() {
     ubuntu:gradle|debian:gradle|pikaos:gradle) echo gradle ;;
     ubuntu:scrcpy|debian:scrcpy|pikaos:scrcpy) echo scrcpy ;;
     ubuntu:jdk21|debian:jdk21|pikaos:jdk21) echo openjdk-21-jdk ;;
+    ubuntu:clang|debian:clang|pikaos:clang) echo clang ;;
+    ubuntu:cmake|debian:cmake|pikaos:cmake) echo cmake ;;
+    ubuntu:ninja|debian:ninja|pikaos:ninja) echo ninja-build ;;
+    ubuntu:mesa-utils|debian:mesa-utils|pikaos:mesa-utils) echo mesa-utils ;;
     ubuntu:docker|debian:docker|pikaos:docker) echo docker.io ;;
     ubuntu:docker-compose|debian:docker-compose|pikaos:docker-compose) echo docker-compose-v2 ;;
     ubuntu:docker-buildx|debian:docker-buildx|pikaos:docker-buildx) echo docker-buildx-plugin ;;
@@ -576,6 +592,10 @@ map_package() {
     opensuse:gradle) echo gradle ;;
     opensuse:scrcpy) echo scrcpy ;;
     opensuse:jdk21) echo java-21-openjdk ;;
+    opensuse:clang) echo clang ;;
+    opensuse:cmake) echo cmake ;;
+    opensuse:ninja) echo ninja ;;
+    opensuse:mesa-utils) echo Mesa-demo-x ;;
     opensuse:docker) echo docker ;;
     opensuse:docker-compose) echo docker-compose-switch ;;
     opensuse:docker-buildx) echo docker-buildx ;;
