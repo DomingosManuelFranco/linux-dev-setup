@@ -246,7 +246,9 @@ log "Non-interactive: $NON_INTERACTIVE"
 filter_arch_packages() {
   filtered=()
   for pkg in "$@"; do
-    if pacman -Si "$pkg" >/dev/null 2>&1; then
+    if package_requirement_satisfied "$pkg"; then
+      log "Using existing command for package requirement: $pkg"
+    elif pacman -Si "$pkg" >/dev/null 2>&1; then
       filtered+=("$pkg")
     elif package_requirement_satisfied "$pkg"; then
       log "Using existing command for unavailable package: $pkg"

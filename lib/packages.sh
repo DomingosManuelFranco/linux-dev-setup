@@ -178,6 +178,9 @@ package_requirement_satisfied() {
     terraform)
       have terraform
       ;;
+    scrcpy)
+      have scrcpy
+      ;;
     packer)
       have packer
       ;;
@@ -244,6 +247,21 @@ reconcile_packages() {
   shift
 
   case "$distro" in
+    arch)
+      local -a kept=()
+      local pkg
+
+      for pkg in "$@"; do
+        case "$pkg" in
+          docker|docker-compose|docker-buildx)
+            continue
+            ;;
+        esac
+        kept+=("$pkg")
+      done
+
+      printf '%s\n' "${kept[@]}"
+      ;;
     fedora)
       local -a kept=()
       local pkg
@@ -323,7 +341,7 @@ map_package() {
     arch:sqlite) echo sqlite ;;
     arch:postgresql-client) echo postgresql-libs ;;
     arch:mysql-client) echo mariadb-clients ;;
-    arch:redis-tools) echo redis ;;  # Arch ships redis as a single package; the CLI (redis-cli) is included
+    arch:redis-tools) echo valkey ;;  # Arch ships redis-cli via valkey, which provides redis
     arch:mongosh) return 1 ;;  # installed via vendor step (mongosh binary)
     arch:mkcert) echo mkcert ;;
     arch:android-tools) echo android-tools ;;
@@ -346,7 +364,7 @@ map_package() {
     arch:aws-cli) echo aws-cli-v2 ;;
     arch:azure-cli) echo azure-cli ;;
     arch:age) echo age ;;
-    arch:hadolint) echo hadolint ;;
+    arch:hadolint) return 1 ;;  # installed via vendor step
     arch:code) echo code ;;
     arch:google-chrome) echo google-chrome ;;
     arch:podman-desktop) echo podman-desktop ;;

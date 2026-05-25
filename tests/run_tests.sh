@@ -148,6 +148,10 @@ test_package_resolution() {
   [[ "$res" == "python-pynvim" ]] || fail "Expected python-pynvim for arch, got $res"
   pass "arch python-neovim mapping"
 
+  res=$(map_package arch redis-tools)
+  [[ "$res" == "valkey" ]] || fail "Expected valkey for arch redis-tools, got $res"
+  pass "arch redis-tools mapping"
+
   res=$(map_package fedora mysql-client)
   [[ "$res" == "mariadb" ]] || fail "Expected mariadb for fedora, got $res"
   pass "fedora mysql-client mapping"
@@ -183,6 +187,10 @@ test_package_resolution() {
   [[ -z "$res" ]] || fail "Expected opensuse hadolint to be vendor-managed, got $res"
   package_managed_via_vendor hadolint || fail "Expected hadolint to be vendor-managed"
 
+  res=$(map_package arch hadolint 2>/dev/null || true)
+  [[ -z "$res" ]] || fail "Expected arch hadolint to be vendor-managed, got $res"
+  package_managed_via_vendor hadolint || fail "Expected hadolint to be vendor-managed on arch"
+
   res=$(map_package opensuse font-jetbrains-mono-nerd 2>/dev/null || true)
   [[ -z "$res" ]] || fail "Expected opensuse font package to be vendor-managed, got $res"
   package_managed_via_vendor font-jetbrains-mono-nerd || fail "Expected font-jetbrains-mono-nerd to be vendor-managed"
@@ -201,12 +209,13 @@ test_manual_package_satisfaction() {
 
   (
     have() {
-      [[ "$1" == "wget" || "$1" == "starship" || "$1" == "7zz" ]]
+      [[ "$1" == "wget" || "$1" == "starship" || "$1" == "7zz" || "$1" == "scrcpy" ]]
     }
 
     package_requirement_satisfied wget2-wget || fail "Expected wget2-wget to be satisfied by wget command"
     package_requirement_satisfied starship || fail "Expected starship to be satisfied by starship command"
     package_requirement_satisfied 7zip || fail "Expected 7zip to be satisfied by 7zz command"
+    package_requirement_satisfied scrcpy || fail "Expected scrcpy package to be satisfied by scrcpy command"
 
     if package_requirement_satisfied neovim; then
       fail "Expected neovim package satisfaction check to remain unsupported"
@@ -330,6 +339,23 @@ test_reconcile_fedora_conflicts() {
   [[ " ${reconciled[*]} " != *" podman-docker "* ]] || fail "Expected podman-docker to be dropped when moby-engine is selected"
 
   pass "fedora package conflicts are reconciled"
+}
+
+test_reconcile_arch_prefers_podman() {
+  echo "--- Running test_reconcile_arch_prefers_podman ---"
+
+  local -a reconciled=()
+  mapfile -t reconciled < <(reconcile_packages arch docker docker-compose docker-buildx podman podman-docker buildah skopeo)
+
+  [[ " ${reconciled[*]} " != *" docker "* ]] || fail "Expected docker to be dropped on arch"
+  [[ " ${reconciled[*]} " != *" docker-compose "* ]] || fail "Expected docker-compose to be dropped on arch"
+  [[ " ${reconciled[*]} " != *" docker-buildx "* ]] || fail "Expected docker-buildx to be dropped on arch"
+  [[ " ${reconciled[*]} " == *" podman "* ]] || fail "Expected podman to be kept on arch"
+  [[ " ${reconciled[*]} " == *" podman-docker "* ]] || fail "Expected podman-docker to be kept on arch"
+  [[ " ${reconciled[*]} " == *" buildah "* ]] || fail "Expected buildah to be kept on arch"
+  [[ " ${reconciled[*]} " == *" skopeo "* ]] || fail "Expected skopeo to be kept on arch"
+
+  pass "arch package conflicts prefer podman"
 }
 
 # --- Test: failure_aggregations ---
@@ -648,6 +674,7 @@ test_gnome_terminal_configuration
 test_neovim_configuration
 test_tmux_plugin_configuration
 test_reconcile_fedora_conflicts
+test_reconcile_arch_prefers_podman
 test_failure_aggregations
 test_collect_packages_records_unmapped_required
 test_collect_packages_records_unmapped_optional

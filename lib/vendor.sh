@@ -283,35 +283,49 @@ bootstrap_optional_vendors() {
 install_terragrunt() {
   have terragrunt && return 0
   local arch; arch="$(_arch_go)"
-  install_binary_from_tarball terragrunt \
-    "https://github.com/gruntwork-io/terragrunt/releases/latest/download/terragrunt_linux_${arch}.tar.gz" \
-    "terragrunt"
+  log "Installing terragrunt"
+  mkdir -p "$HOME/.local/bin"
+  download_release_asset \
+    "https://github.com/gruntwork-io/terragrunt/releases/latest/download/terragrunt_linux_${arch}" \
+    "$HOME/.local/bin/terragrunt"
+  chmod 0755 "$HOME/.local/bin/terragrunt"
 }
 
 install_stern() {
   have stern && return 0
   local arch; arch="$(_arch_go)"
+  local version
+  version="$(_github_latest_tag stern/stern)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve stern version; skipping"
+    return 1
+  fi
   install_binary_from_tarball stern \
-    "https://github.com/stern/stern/releases/latest/download/stern_linux_${arch}.tar.gz" \
+    "https://github.com/stern/stern/releases/download/v${version}/stern_${version}_linux_${arch}.tar.gz" \
     "stern"
 }
 
 install_trivy() {
   have trivy && return 0
-  local arch_uname; arch_uname="$(_arch_uname)"
   # trivy uses 64bit / ARM64 naming
   local trivy_arch
+  local version
   case "$(uname -m)" in
     x86_64)  trivy_arch="64bit" ;;
     aarch64|arm64) trivy_arch="ARM64" ;;
     *) trivy_arch="64bit" ;;
   esac
+  version="$(_github_latest_tag aquasecurity/trivy)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve trivy version; skipping"
+    return 1
+  fi
   local archive="$VENDOR_TMP_DIR/trivy.tar.gz"
   local extract_dir="$VENDOR_TMP_DIR/trivy-extract"
   log "Installing trivy"
   rm -rf "$extract_dir"
   mkdir -p "$HOME/.local/bin" "$extract_dir" "$VENDOR_TMP_DIR"
-  download_release_asset "https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-${trivy_arch}.tar.gz" "$archive"
+  download_release_asset "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_Linux-${trivy_arch}.tar.gz" "$archive"
   tar -xzf "$archive" -C "$extract_dir"
   local trivy_bin
   trivy_bin="$(find "$extract_dir" -maxdepth 2 -name 'trivy' -type f | head -1)"
@@ -496,8 +510,14 @@ install_bundletool() {
   have bundletool && return 0
   log "Installing bundletool"
   mkdir -p "$HOME/.local/bin" "$HOME/.local/share" "$VENDOR_TMP_DIR"
+  local version
+  version="$(_github_latest_tag google/bundletool)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve bundletool version; skipping"
+    return 1
+  fi
   download_release_asset \
-    "https://github.com/google/bundletool/releases/latest/download/bundletool-all.jar" \
+    "https://github.com/google/bundletool/releases/download/${version}/bundletool-all-${version}.jar" \
     "$HOME/.local/share/bundletool.jar"
   cat > "$HOME/.local/bin/bundletool" <<'SCRIPT'
 #!/usr/bin/env sh
@@ -572,8 +592,14 @@ install_mongosh() {
 install_usql() {
   have usql && return 0
   local arch; arch="$(_arch_go)"
+  local version
+  version="$(_github_latest_tag xo/usql)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve usql version; skipping"
+    return 1
+  fi
   install_binary_from_bz2 usql \
-    "https://github.com/xo/usql/releases/latest/download/usql-linux-${arch}.tar.bz2" \
+    "https://github.com/xo/usql/releases/download/v${version}/usql-${version}-linux-${arch}.tar.bz2" \
     "usql"
 }
 
@@ -592,8 +618,17 @@ install_argocd() {
 
 install_flux() {
   have flux && return 0
+  local arch; arch="$(_arch_go)"
+  local version
+  version="$(_github_latest_tag fluxcd/flux2)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve flux version; skipping"
+    return 1
+  fi
   log "Installing flux"
-  curl -fsSL https://fluxcd.io/install.sh | FLUX_VERSION=latest bash -s -- --bin-dir "$HOME/.local/bin" >/dev/null 2>&1 || warn "flux install failed"
+  install_binary_from_tarball flux \
+    "https://github.com/fluxcd/flux2/releases/download/v${version}/flux_${version}_linux_${arch}.tar.gz" \
+    "flux"
 }
 
 install_gitleaks() {
@@ -619,8 +654,14 @@ install_gitleaks() {
 install_trufflehog() {
   have trufflehog && return 0
   local arch; arch="$(_arch_go)"
+  local version
+  version="$(_github_latest_tag trufflesecurity/trufflehog)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve trufflehog version; skipping"
+    return 1
+  fi
   install_binary_from_tarball trufflehog \
-    "https://github.com/trufflesecurity/trufflehog/releases/latest/download/trufflehog_linux_${arch}.tar.gz" \
+    "https://github.com/trufflesecurity/trufflehog/releases/download/v${version}/trufflehog_${version}_linux_${arch}.tar.gz" \
     "trufflehog"
 }
 
@@ -635,8 +676,14 @@ install_tflint() {
 install_dive() {
   have dive && return 0
   local arch; arch="$(_arch_go)"
+  local version
+  version="$(_github_latest_tag wagoodman/dive)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve dive version; skipping"
+    return 1
+  fi
   install_binary_from_tarball dive \
-    "https://github.com/wagoodman/dive/releases/latest/download/dive_linux_${arch}.tar.gz" \
+    "https://github.com/wagoodman/dive/releases/download/v${version}/dive_${version}_linux_${arch}.tar.gz" \
     "dive"
 }
 
@@ -662,8 +709,14 @@ install_act() {
 install_kubeseal() {
   have kubeseal && return 0
   local arch; arch="$(_arch_go)"
+  local version
+  version="$(_github_latest_tag bitnami-labs/sealed-secrets)"
+  if [[ -z "$version" ]]; then
+    warn "Could not resolve kubeseal version; skipping"
+    return 1
+  fi
   install_binary_from_tarball kubeseal \
-    "https://github.com/bitnami-labs/sealed-secrets/releases/latest/download/kubeseal-linux-${arch}.tar.gz" \
+    "https://github.com/bitnami-labs/sealed-secrets/releases/download/v${version}/kubeseal-${version}-linux-${arch}.tar.gz" \
     "kubeseal"
 }
 
@@ -708,7 +761,7 @@ install_vault() {
 
 install_eksctl() {
   have eksctl && return 0
-  local arch; arch="$(_arch_uname)"
+  local arch; arch="$(_arch_go)"
   install_binary_from_tarball eksctl \
     "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_${arch}.tar.gz" \
     "eksctl"

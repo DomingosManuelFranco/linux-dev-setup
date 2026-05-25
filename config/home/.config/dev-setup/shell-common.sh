@@ -19,9 +19,17 @@ _prepend_path "$HOME/.atuin/bin"
 _prepend_path "$HOME/.cargo/bin"
 _prepend_path "$HOME/.local/share/pnpm"
 _prepend_path "$HOME/.local/share/flutter/bin"
+_prepend_path "$HOME/.pub-cache/bin"
+_prepend_path "$HOME/.maestro/bin"
 _prepend_path "$HOME/Android/Sdk/platform-tools"
 _prepend_path "$HOME/Android/Sdk/cmdline-tools/latest/bin"
 _prepend_path "$HOME/Android/Sdk/emulator"
+
+if command -v ruby >/dev/null 2>&1; then
+  _ruby_user_bin="$(ruby -e 'require "rubygems"; print Gem.user_dir' 2>/dev/null)/bin"
+  _prepend_path "$_ruby_user_bin"
+  unset _ruby_user_bin
+fi
 
 export EDITOR="nvim"
 export VISUAL="nvim"
