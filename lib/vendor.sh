@@ -224,6 +224,9 @@ install_android_cmdline_tools() {
   local tools_root="$android_home/cmdline-tools"
   local latest_root="$tools_root/latest"
   local sdkmanager_bin="$latest_root/bin/sdkmanager"
+  local platform_dir build_tools_dir emulator_bin platform_tools_bin
+  local target_platform="35"
+  local target_build_tools="35.0.0"
 
   if [[ ! -e /dev/kvm ]]; then
     record_warning "KVM (/dev/kvm) not available — Android emulator hardware acceleration disabled."
@@ -246,24 +249,22 @@ install_android_cmdline_tools() {
 
   if [[ -x "$sdkmanager_bin" ]]; then
     yes | "$sdkmanager_bin" --licenses >/dev/null 2>&1 || true
-    
-    local platforms
-    platforms="$("$sdkmanager_bin" --sdk_root="$android_home" --list 2>/dev/null | grep -oP '^  platforms;android-\K[0-9]+' | sort -rn || true)"
-    local latest_platform="$(echo "$platforms" | head -1)"
-    latest_platform="${latest_platform:-35}"
-    
-    local build_tools
-    build_tools="$("$sdkmanager_bin" --sdk_root="$android_home" --list 2>/dev/null | grep -oP '^  build-tools;\K[0-9]+\.[0-9]+\.[0-9]+' | sort -rV || true)"
-    local latest_build_tools="$(echo "$build_tools" | head -1)"
-    latest_build_tools="${latest_build_tools:-35.0.0}"
+    platform_tools_bin="$android_home/platform-tools/adb"
+    platform_dir="$android_home/platforms/android-${target_platform}"
+    build_tools_dir="$android_home/build-tools/${target_build_tools}"
+    emulator_bin="$android_home/emulator/emulator"
     
     if ! "$sdkmanager_bin" --sdk_root="$android_home" \
       "platform-tools" \
-      "platforms;android-${latest_platform}" \
-      "build-tools;${latest_build_tools}" \
+      "platforms;android-${target_platform}" \
+      "build-tools;${target_build_tools}" \
       "cmdline-tools;latest" \
       "emulator" >/dev/null 2>&1; then
-      record_vendor_failure "android-sdk-components"
+      if [[ -x "$platform_tools_bin" && -d "$platform_dir" && -d "$build_tools_dir" && -x "$emulator_bin" ]]; then
+        warn "Android SDK package install returned non-zero, but required components are present"
+      else
+        record_vendor_failure "android-sdk-components"
+      fi
     fi
   else
     record_vendor_failure "android-sdkmanager"
