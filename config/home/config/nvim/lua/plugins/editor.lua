@@ -2,59 +2,67 @@ return {
   -- ── Treesitter ───────────────────────────────────────────────────────────
   {
     "nvim-treesitter/nvim-treesitter",
-    branch = "master",
+    branch = "main",
     build = ":TSUpdate",
-    event = { "BufReadPost", "BufNewFile" },
     dependencies = {
       "nvim-treesitter/nvim-treesitter-textobjects",
     },
     config = function()
-      require("nvim-treesitter.configs").setup({
-        ensure_installed = {
-          "bash", "c", "css", "dockerfile", "fish",
-          "git_config", "gitcommit", "gitignore",
-          "go", "gomod", "gosum",
-          "html", "javascript", "jsdoc",
-          "json", "jsonc", "lua", "luadoc",
-          "markdown", "markdown_inline",
-          "nginx", "python", "query", "regex",
-          "rust", "sql", "terraform", "toml",
-          "tsx", "typescript", "vim", "vimdoc",
-          "xml", "yaml",
-        },
-        auto_install = true,
-        highlight    = { enable = true, additional_vim_regex_highlighting = false },
-        indent       = { enable = true },
-        incremental_selection = {
-          enable  = true,
+      require("nvim-treesitter").setup()
+
+      -- Enable treesitter highlighting and indentation natively
+      vim.api.nvim_create_autocmd("FileType", {
+        callback = function()
+          pcall(vim.treesitter.start)
+          vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        end,
+      })
+
+      -- Textobjects
+      require("nvim-treesitter-textobjects").setup({
+        select = {
+          lookahead = true,
           keymaps = {
-            init_selection    = "<C-space>",
-            node_incremental  = "<C-space>",
-            scope_incremental = false,
-            node_decremental  = "<bs>",
+            ["af"] = "@function.outer",
+            ["if"] = "@function.inner",
+            ["ac"] = "@class.outer",
+            ["ic"] = "@class.inner",
+            ["aa"] = "@parameter.outer",
+            ["ia"] = "@parameter.inner",
           },
         },
-        textobjects = {
-          select = {
-            enable    = true,
-            lookahead = true,
-            keymaps = {
-              ["af"] = "@function.outer",
-              ["if"] = "@function.inner",
-              ["ac"] = "@class.outer",
-              ["ic"] = "@class.inner",
-              ["aa"] = "@parameter.outer",
-              ["ia"] = "@parameter.inner",
-            },
-          },
-          move = {
-            enable              = true,
-            set_jumps           = true,
-            goto_next_start     = { ["]f"] = "@function.outer", ["]c"] = "@class.outer" },
-            goto_previous_start = { ["[f"] = "@function.outer", ["[c"] = "@class.outer" },
-          },
+        move = {
+          set_jumps = true,
+          goto_next_start     = { ["]f"] = "@function.outer", ["]c"] = "@class.outer" },
+          goto_previous_start = { ["[f"] = "@function.outer", ["[c"] = "@class.outer" },
         },
       })
+
+      -- Schedule installation of required parsers
+      local ensure = {
+        "bash", "c", "css", "dockerfile", "fish",
+        "git_config", "gitcommit", "gitignore",
+        "go", "gomod", "gosum",
+        "html", "javascript", "jsdoc",
+        "json", "jsonc", "lua", "luadoc",
+        "markdown", "markdown_inline",
+        "nginx", "python", "query", "regex",
+        "rust", "sql", "terraform", "toml",
+        "tsx", "typescript", "vim", "vimdoc",
+        "xml", "yaml",
+      }
+      local installed = require("nvim-treesitter.config").get_installed()
+      local missing = {}
+      for _, lang in ipairs(ensure) do
+        if not vim.tbl_contains(installed, lang) then
+          table.insert(missing, lang)
+        end
+      end
+      if #missing > 0 then
+        vim.schedule(function()
+          require("nvim-treesitter").install(missing)
+        end)
+      end
     end,
   },
 

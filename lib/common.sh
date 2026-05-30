@@ -162,7 +162,7 @@ link_dotfiles() {
   while IFS= read -r -d '' source; do
     local rel target
     rel="${source#$DOTFILES_ROOT/}"
-    target="$HOME/$rel"
+    target="$HOME/.$rel"
     link_one "$source" "$target"
   done < <(find "$DOTFILES_ROOT" \( -type f -o -type l \) -print0)
 }
@@ -177,8 +177,8 @@ render_templates() {
   while IFS= read -r -d '' template; do
     local rel target_dir target
     rel="${template#$templates_root/}"
-    target_dir="$HOME/$(dirname "$rel")"
-    target="$HOME/${rel%.tmpl}"
+    target_dir="$HOME/.$(dirname "$rel")"
+    target="$HOME/.${rel%.tmpl}"
 
     mkdir -p "$target_dir"
     if [[ -L "$target" ]]; then

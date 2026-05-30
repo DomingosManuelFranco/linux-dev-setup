@@ -1,6 +1,6 @@
 [tools]
 node = "lts"
-python = "3.12"
+python = "system"
 java = "temurin-21"
 go = "latest"
 rust = "stable"
