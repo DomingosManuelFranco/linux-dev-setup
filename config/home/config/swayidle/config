@@ -1,0 +1,5 @@
+# swayidle disabled - no auto-lock, no auto-sleep
+# Remove the comments below to re-enable:
+# timeout 300 'swaylock -f' resume 'swaylock -f'
+# timeout 600 'swaylock -f; niri msg action power-off-monitors' resume 'swaylock -f'
+# before-sleep 'swaylock -f'

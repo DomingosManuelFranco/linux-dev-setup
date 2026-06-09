@@ -54,19 +54,19 @@
     "tooltip-format": "{controller_alias}\t{controller_address}",
     "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{device_enumerate}",
     "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
-    "on-click": "exec ghostty --title=bluetui -e bluetui"
+    "on-click": "kitty --title=bluetoothctl -e bluetoothctl"
   },
   "cpu": {
     "interval": 10,
     "format": " {}%",
     "max-length": 10,
-    "on-click": "exec ghostty --title=btop -e btop"
+    "on-click": "kitty --title=btop -e btop"
   },
   "memory": {
     "interval": 30,
     "format": " {percentage}%",
     "tooltip-format": "{used:0.1f}G/{total:0.1f}G used",
-    "on-click": "exec ghostty --title=htop -e htop"
+    "on-click": "kitty --title=htop -e htop"
   },
   "network": {
     "format": "",
@@ -78,7 +78,7 @@
     "tooltip-format-ethernet": "{ifname} ",
     "tooltip-format-disconnected": "󰖪",
     "max-length": 50,
-    "on-click": "exec ghostty --title=nmtui -e nmtui"
+    "on-click": "kitty --title=nmtui -e nmtui"
   },
   "clock": {
     "format": "󰥔 {:%a, %d. %b %I:%M %p}",
@@ -88,7 +88,7 @@
         "today": "<span color='#75f1fa'><b>{}</b></span>"
       }
     },
-    "on-click": "exec chromium --app=https://calendar.google.com"
+    "on-click": "google-chrome-stable --app=https://calendar.google.com"
   },
   "pulseaudio": {
     "format": "{volume}% {icon}",
