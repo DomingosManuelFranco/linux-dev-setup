@@ -10,7 +10,8 @@
     "network",
     "cpu",
     "memory",
-    "tray"
+    "tray",
+    "group/power"
   ],
   "niri/window": {
     "max-length": 50
@@ -138,5 +139,28 @@
   "tray": {
     "spacing": 10,
     "icon-size": 16
+  },
+  "group/power": {
+    "orientation": "horizontal",
+    "modules": [
+      "custom/lock",
+      "custom/restart",
+      "custom/shutdown"
+    ]
+  },
+  "custom/lock": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "swaylock -f"
+  },
+  "custom/restart": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "systemctl reboot"
+  },
+  "custom/shutdown": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "systemctl poweroff"
   }
 }

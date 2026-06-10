@@ -104,3 +104,25 @@ tooltip label {
   color: @dark-5;
   font-size: 11px;
 }
+
+#custom-lock,
+#custom-restart,
+#custom-shutdown {
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: @dark-8;
+  margin: 2px 2px 2px 0px;
+}
+
+#custom-shutdown {
+  margin-right: 6px;
+}
+
+#custom-restart:hover {
+  color: #e0af68;
+}
+
+#custom-shutdown:hover {
+  color: #f7768e;
+}
