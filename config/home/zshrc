@@ -91,3 +91,9 @@ bindkey '^[[3~' delete-char
 export PATH=/home/woodzo/.opencode/bin:$PATH
 
 alias yay='PATH="/usr/bin:$PATH" yay'
+export PATH=$PATH:$HOME/.maestro/bin
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/home/woodzo/.lmstudio/bin"
+# End of LM Studio CLI section
+

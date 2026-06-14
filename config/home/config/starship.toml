@@ -55,6 +55,7 @@ disabled = false
 style = "bg:red fg:crust"
 
 [os.symbols]
+Fedora = "󰣛"
 Arch = "󰣇"
 Linux = "󰌽"
 

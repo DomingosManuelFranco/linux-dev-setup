@@ -8,7 +8,21 @@ return {
       "nvim-treesitter/nvim-treesitter-textobjects",
     },
     config = function()
-      require("nvim-treesitter").setup()
+      require("nvim-treesitter").setup({
+        ensure_installed = {
+          "bash", "c", "css", "dockerfile", "fish",
+          "git_config", "gitcommit", "gitignore",
+          "go", "gomod", "gosum",
+          "html", "javascript", "jsdoc",
+          "json", "lua", "luadoc",
+          "markdown", "markdown_inline",
+          "nginx", "python", "query", "regex",
+          "rust", "sql", "terraform", "toml",
+          "tsx", "typescript", "vim", "vimdoc",
+          "xml", "yaml",
+        },
+        auto_install = true,
+      })
 
       -- Enable treesitter highlighting and indentation natively
       vim.api.nvim_create_autocmd("FileType", {
@@ -37,32 +51,6 @@ return {
           goto_previous_start = { ["[f"] = "@function.outer", ["[c"] = "@class.outer" },
         },
       })
-
-      -- Schedule installation of required parsers
-      local ensure = {
-        "bash", "c", "css", "dockerfile", "fish",
-        "git_config", "gitcommit", "gitignore",
-        "go", "gomod", "gosum",
-        "html", "javascript", "jsdoc",
-        "json", "jsonc", "lua", "luadoc",
-        "markdown", "markdown_inline",
-        "nginx", "python", "query", "regex",
-        "rust", "sql", "terraform", "toml",
-        "tsx", "typescript", "vim", "vimdoc",
-        "xml", "yaml",
-      }
-      local installed = require("nvim-treesitter.config").get_installed()
-      local missing = {}
-      for _, lang in ipairs(ensure) do
-        if not vim.tbl_contains(installed, lang) then
-          table.insert(missing, lang)
-        end
-      end
-      if #missing > 0 then
-        vim.schedule(function()
-          require("nvim-treesitter").install(missing)
-        end)
-      end
     end,
   },
 
@@ -253,7 +241,7 @@ return {
     "iamcco/markdown-preview.nvim",
     cmd    = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
     ft     = { "markdown" },
-    build  = function() vim.fn["mkdp#util#install"]() end,
+    build  = ":call mkdp#util#install()",
     keys   = {
       { "<leader>mp", "<cmd>MarkdownPreviewToggle<cr>", ft = "markdown", desc = "Markdown preview" },
     },

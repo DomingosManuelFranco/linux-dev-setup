@@ -1,6 +1,6 @@
 [tools]
 node = "lts"
-python = "system"
+# python = "system"  -- removed: triggers mise deprecation warning (@system is deprecated)
 java = "temurin-21"
 go = "latest"
 rust = "stable"

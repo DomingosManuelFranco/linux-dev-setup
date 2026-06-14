@@ -192,7 +192,7 @@ return {
 
           -- Highlight symbol under cursor
           local client = vim.lsp.get_client_by_id(event.data.client_id)
-          if client and client.supports_method("textDocument/documentHighlight") then
+          if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight, event.buf) then
             local hlgroup = vim.api.nvim_create_augroup("lsp-highlight-" .. event.buf, { clear = false })
             vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
               buffer   = event.buf,
@@ -218,7 +218,7 @@ return {
         emmet_ls          = {
           filetypes = { "html", "css", "scss", "javascript", "javascriptreact", "typescript", "typescriptreact", "vue" },
         },
-        volar             = {},   -- Vue
+        vue_ls            = {},   -- Vue
         tailwindcss       = {},
 
         -- DevOps / Infra
@@ -227,7 +227,6 @@ return {
         docker_compose_language_service = {},
         dockerls          = {},
         helm_ls           = {},
-        nginx_language_server = {},
         terraformls       = {},
 
         -- Data / Config
