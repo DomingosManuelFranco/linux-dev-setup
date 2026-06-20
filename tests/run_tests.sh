@@ -229,9 +229,9 @@ test_zypper_search_parsing() {
   echo "--- Running test_zypper_search_parsing ---"
 
   local output
-  output=$'S | Name                     | Summary                         | Type\n--+--------------------------+---------------------------------+--------\n  | zsh                      | Z shell                         | package\n'
+  output=$'S | Name                     | Summary                         | Type\n--+--------------------------+---------------------------------+--------\n  | fish                     | Friendly Interactive Shell      | package\n'
 
-  printf '%s' "$output" | zypper_search_has_package zsh || fail "Expected zypper parser to detect zsh"
+  printf '%s' "$output" | zypper_search_has_package fish || fail "Expected zypper parser to detect fish"
 
   if printf '%s' "$output" | zypper_search_has_package neovim; then
     fail "Expected zypper parser not to match unrelated package names"
@@ -258,7 +258,7 @@ test_zypper_capability_resolution() {
 test_fastfetch_template_configuration() {
   echo "--- Running test_fastfetch_template_configuration ---"
 
-  local template="$REPO_ROOT/config/templates/.config/fastfetch/config.jsonc.tmpl"
+  local template="$REPO_ROOT/config/templates/config/fastfetch/config.jsonc.tmpl"
 
   [[ -f "$template" ]] || fail "Expected fastfetch template to exist"
   grep -q '"modules": \[' "$template" || fail "Expected fastfetch template to include modules"
@@ -270,15 +270,15 @@ test_fastfetch_template_configuration() {
 test_terminal_font_configuration() {
   echo "--- Running test_terminal_font_configuration ---"
 
-  grep -q 'font_family JetBrainsMono Nerd Font Mono' "$REPO_ROOT/config/home/.config/kitty/kitty.conf" \
+  grep -q 'font_family JetBrainsMono Nerd Font Mono' "$REPO_ROOT/config/home/config/kitty/kitty.conf" \
     || fail "Expected Kitty to use JetBrainsMono Nerd Font Mono"
-  grep -q 'family = "JetBrainsMono Nerd Font Mono"' "$REPO_ROOT/config/home/.config/alacritty/alacritty.toml" \
+  grep -q 'family = "JetBrainsMono Nerd Font Mono"' "$REPO_ROOT/config/home/config/alacritty/alacritty.toml" \
     || fail "Expected Alacritty to use JetBrainsMono Nerd Font Mono"
-  grep -q 'DefaultProfile=Shell.profile' "$REPO_ROOT/config/home/.config/konsolerc" \
+  grep -q 'DefaultProfile=Shell.profile' "$REPO_ROOT/config/home/config/konsolerc" \
     || fail "Expected Konsole default profile to be Shell.profile"
-  grep -q 'ColorScheme=DankNight' "$REPO_ROOT/config/home/.local/share/konsole/Shell.profile" \
+  grep -q 'ColorScheme=DankNight' "$REPO_ROOT/config/home/local/share/konsole/Shell.profile" \
     || fail "Expected Konsole profile to use DankNight color scheme"
-  grep -q 'Font=JetBrainsMono Nerd Font Mono,12,-1,5,50,0,0,0,0,0' "$REPO_ROOT/config/home/.local/share/konsole/Shell.profile" \
+  grep -q 'Font=JetBrainsMono Nerd Font Mono,12,-1,5,50,0,0,0,0,0' "$REPO_ROOT/config/home/local/share/konsole/Shell.profile" \
     || fail "Expected Konsole profile to use JetBrainsMono Nerd Font Mono"
 
   pass "terminal font configuration is consistent"
@@ -300,13 +300,13 @@ test_gnome_terminal_configuration() {
 test_neovim_configuration() {
   echo "--- Running test_neovim_configuration ---"
 
-  grep -q 'folke/lazy.nvim' "$REPO_ROOT/config/home/.config/nvim/lua/config/lazy.lua" \
+  grep -q 'folke/lazy.nvim' "$REPO_ROOT/config/home/config/nvim/lua/config/lazy.lua" \
     || fail "Expected Neovim to bootstrap lazy.nvim"
-  grep -q 'catppuccin/nvim' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/ui.lua" \
+  grep -q 'catppuccin/nvim' "$REPO_ROOT/config/home/config/nvim/lua/plugins/ui.lua" \
     || fail "Expected Neovim UI config to include catppuccin"
-  grep -q 'saghen/blink.cmp' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/lsp.lua" \
+  grep -q 'saghen/blink.cmp' "$REPO_ROOT/config/home/config/nvim/lua/plugins/lsp.lua" \
     || fail "Expected Neovim LSP config to include blink.cmp"
-  grep -q 'christoomey/vim-tmux-navigator' "$REPO_ROOT/config/home/.config/nvim/lua/plugins/tmux.lua" \
+  grep -q 'christoomey/vim-tmux-navigator' "$REPO_ROOT/config/home/config/nvim/lua/plugins/tmux.lua" \
     || fail "Expected Neovim editor config to include tmux navigation"
 
   pass "neovim configuration is present"
@@ -315,47 +315,40 @@ test_neovim_configuration() {
 test_tmux_plugin_configuration() {
   echo "--- Running test_tmux_plugin_configuration ---"
 
-  grep -q "tmux-plugins/tpm" "$REPO_ROOT/config/home/.tmux.conf" \
+  grep -q "tmux-plugins/tpm" "$REPO_ROOT/config/home/tmux.conf" \
     || fail "Expected tmux config to include TPM"
-  grep -q "tmux-plugins/tmux-resurrect" "$REPO_ROOT/config/home/.tmux.conf" \
+  grep -q "tmux-plugins/tmux-resurrect" "$REPO_ROOT/config/home/tmux.conf" \
     || fail "Expected tmux config to include tmux-resurrect"
-  grep -q "christoomey/vim-tmux-navigator" "$REPO_ROOT/config/home/.tmux.conf" \
+  grep -q "christoomey/vim-tmux-navigator" "$REPO_ROOT/config/home/tmux.conf" \
     || fail "Expected tmux config to include vim-tmux-navigator"
-  grep -q "run '~/.tmux/plugins/tpm/tpm'" "$REPO_ROOT/config/home/.tmux.conf" \
+  grep -q "run '~/.tmux/plugins/tpm/tpm'" "$REPO_ROOT/config/home/tmux.conf" \
     || fail "Expected tmux config to initialize TPM"
 
   pass "tmux plugin configuration is present"
 }
 
-test_reconcile_fedora_conflicts() {
-  echo "--- Running test_reconcile_fedora_conflicts ---"
+test_reconcile_keeps_docker_and_podman_independent() {
+  echo "--- Running test_reconcile_keeps_docker_and_podman_independent ---"
 
   local -a reconciled=()
-  mapfile -t reconciled < <(reconcile_packages fedora moby-engine podman podman-docker buildah)
+  mapfile -t reconciled < <(reconcile_packages fedora moby-engine podman buildah)
 
   [[ " ${reconciled[*]} " == *" moby-engine "* ]] || fail "Expected moby-engine to be kept"
   [[ " ${reconciled[*]} " == *" podman "* ]] || fail "Expected podman to be kept"
   [[ " ${reconciled[*]} " == *" buildah "* ]] || fail "Expected buildah to be kept"
-  [[ " ${reconciled[*]} " != *" podman-docker "* ]] || fail "Expected podman-docker to be dropped when moby-engine is selected"
+  [[ " ${reconciled[*]} " != *" podman-docker "* ]] || fail "Expected podman-docker not to be introduced"
 
-  pass "fedora package conflicts are reconciled"
-}
+  mapfile -t reconciled < <(reconcile_packages arch docker docker-compose docker-buildx podman buildah skopeo)
 
-test_reconcile_arch_prefers_podman() {
-  echo "--- Running test_reconcile_arch_prefers_podman ---"
-
-  local -a reconciled=()
-  mapfile -t reconciled < <(reconcile_packages arch docker docker-compose docker-buildx podman podman-docker buildah skopeo)
-
-  [[ " ${reconciled[*]} " != *" docker "* ]] || fail "Expected docker to be dropped on arch"
-  [[ " ${reconciled[*]} " != *" docker-compose "* ]] || fail "Expected docker-compose to be dropped on arch"
-  [[ " ${reconciled[*]} " != *" docker-buildx "* ]] || fail "Expected docker-buildx to be dropped on arch"
+  [[ " ${reconciled[*]} " == *" docker "* ]] || fail "Expected docker to be kept on arch"
+  [[ " ${reconciled[*]} " == *" docker-compose "* ]] || fail "Expected docker-compose to be kept on arch"
+  [[ " ${reconciled[*]} " == *" docker-buildx "* ]] || fail "Expected docker-buildx to be kept on arch"
   [[ " ${reconciled[*]} " == *" podman "* ]] || fail "Expected podman to be kept on arch"
-  [[ " ${reconciled[*]} " == *" podman-docker "* ]] || fail "Expected podman-docker to be kept on arch"
+  [[ " ${reconciled[*]} " != *" podman-docker "* ]] || fail "Expected podman-docker not to be introduced on arch"
   [[ " ${reconciled[*]} " == *" buildah "* ]] || fail "Expected buildah to be kept on arch"
   [[ " ${reconciled[*]} " == *" skopeo "* ]] || fail "Expected skopeo to be kept on arch"
 
-  pass "arch package conflicts prefer podman"
+  pass "docker and podman remain independent"
 }
 
 # --- Test: failure_aggregations ---
@@ -673,8 +666,7 @@ test_terminal_font_configuration
 test_gnome_terminal_configuration
 test_neovim_configuration
 test_tmux_plugin_configuration
-test_reconcile_fedora_conflicts
-test_reconcile_arch_prefers_podman
+test_reconcile_keeps_docker_and_podman_independent
 test_failure_aggregations
 test_collect_packages_records_unmapped_required
 test_collect_packages_records_unmapped_optional

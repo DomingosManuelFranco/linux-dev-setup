@@ -40,7 +40,7 @@ package_group() {
     base)
       cat <<'EOF'
 bash
-zsh
+fish
 git
 neovim
 curl
@@ -116,7 +116,6 @@ docker
 docker-compose
 docker-buildx
 podman
-podman-docker
 buildah
 skopeo
 kubectl
@@ -250,43 +249,9 @@ reconcile_packages() {
   local distro="$1"
   shift
 
+  # Docker and Podman are kept independent (no podman-docker wrapper).
+  # Distro-specific conflict reconciliation can be added here when needed.
   case "$distro" in
-    arch)
-      local -a kept=()
-      local pkg
-
-      for pkg in "$@"; do
-        case "$pkg" in
-          docker|docker-compose|docker-buildx)
-            continue
-            ;;
-        esac
-        kept+=("$pkg")
-      done
-
-      printf '%s\n' "${kept[@]}"
-      ;;
-    fedora)
-      local -a kept=()
-      local pkg
-      local has_docker=0
-
-      for pkg in "$@"; do
-        if [[ "$pkg" == "moby-engine" ]]; then
-          has_docker=1
-          break
-        fi
-      done
-
-      for pkg in "$@"; do
-        if [[ "$pkg" == "podman-docker" && "$has_docker" -eq 1 ]]; then
-          continue
-        fi
-        kept+=("$pkg")
-      done
-
-      printf '%s\n' "${kept[@]}"
-      ;;
     *)
       printf '%s\n' "$@"
       ;;
@@ -299,7 +264,7 @@ map_package() {
 
   case "$distro:$pkg" in
     arch:bash) echo bash ;;
-    arch:zsh) echo zsh ;;
+    arch:fish) echo fish ;;
     arch:git) echo git ;;
     arch:neovim) echo neovim ;;
     arch:curl) echo curl ;;
@@ -360,7 +325,6 @@ map_package() {
     arch:docker-compose) echo docker-compose ;;
     arch:docker-buildx) echo docker-buildx ;;
     arch:podman) echo podman ;;
-    arch:podman-docker) echo podman-docker ;;
     arch:buildah) echo buildah ;;
     arch:skopeo) echo skopeo ;;
     arch:kubectl) echo kubectl ;;
@@ -379,7 +343,7 @@ map_package() {
     arch:jetbrains-toolbox) return 1 ;;  # vendor managed
 
     fedora:bash) echo bash ;;
-    fedora:zsh) echo zsh ;;
+    fedora:fish) echo fish ;;
     fedora:git) echo git ;;
     fedora:neovim) echo neovim ;;
     fedora:curl) echo curl ;;
@@ -440,7 +404,6 @@ map_package() {
     fedora:docker-compose) echo docker-compose ;;
     fedora:docker-buildx) echo docker-buildx ;;
     fedora:podman) echo podman ;;
-    fedora:podman-docker) echo podman-docker ;;
     fedora:buildah) echo buildah ;;
     fedora:skopeo) echo skopeo ;;
     fedora:kubectl) echo kubernetes-client ;;
@@ -459,7 +422,7 @@ map_package() {
     fedora:jetbrains-toolbox) return 1 ;;  # vendor managed
 
     ubuntu:bash|debian:bash|pikaos:bash) echo bash ;;
-    ubuntu:zsh|debian:zsh|pikaos:zsh) echo zsh ;;
+    ubuntu:fish|debian:fish|pikaos:fish) echo fish ;;
     ubuntu:git|debian:git|pikaos:git) echo git ;;
     ubuntu:neovim|debian:neovim|pikaos:neovim) echo neovim ;;
     ubuntu:curl|debian:curl|pikaos:curl) echo curl ;;
@@ -520,7 +483,6 @@ map_package() {
     ubuntu:docker-compose|debian:docker-compose|pikaos:docker-compose) echo docker-compose-v2 ;;
     ubuntu:docker-buildx|debian:docker-buildx|pikaos:docker-buildx) echo docker-buildx-plugin ;;
     ubuntu:podman|debian:podman|pikaos:podman) echo podman ;;
-    ubuntu:podman-docker|debian:podman-docker|pikaos:podman-docker) echo podman-docker ;;
     ubuntu:buildah|debian:buildah|pikaos:buildah) echo buildah ;;
     ubuntu:skopeo|debian:skopeo|pikaos:skopeo) echo skopeo ;;
     ubuntu:kubectl|debian:kubectl|pikaos:kubectl) return 1 ;;  # Not in default apt repos
@@ -539,7 +501,7 @@ map_package() {
     ubuntu:jetbrains-toolbox|debian:jetbrains-toolbox|pikaos:jetbrains-toolbox) return 1 ;;  # vendor managed
 
     opensuse:bash) echo bash ;;
-    opensuse:zsh) echo zsh ;;
+    opensuse:fish) echo fish ;;
     opensuse:git) echo git ;;
     opensuse:neovim) echo neovim ;;
     opensuse:curl) echo curl ;;
@@ -600,7 +562,6 @@ map_package() {
     opensuse:docker-compose) echo docker-compose-switch ;;
     opensuse:docker-buildx) echo docker-buildx ;;
     opensuse:podman) echo podman ;;
-    opensuse:podman-docker) echo podman-docker ;;
     opensuse:buildah) echo buildah ;;
     opensuse:skopeo) echo skopeo ;;
     opensuse:kubectl) echo kubernetes-client ;;

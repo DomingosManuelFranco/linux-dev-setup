@@ -200,7 +200,7 @@ Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devop
   --non-interactive    run without prompting for input
   --git-name NAME      set git user.name
   --git-email EMAIL    set git user.email
-  --skip-shell-change  do not attempt to chsh to zsh
+  --skip-shell-change  do not attempt to chsh to fish
 
   --desktop    apply optional desktop-specific settings
   --roles      comma-separated install roles; default is 'base' only
@@ -373,9 +373,9 @@ if [[ "$SETUP_GITHUB" -eq 1 ]]; then
 fi
 
 if [[ "$SKIP_SHELL_CHANGE" -eq 0 && "$NON_INTERACTIVE" -eq 0 ]]; then
-  if have chsh && have zsh; then
-    if [[ "${SHELL:-}" != "$(command -v zsh)" ]]; then
-      chsh -s "$(command -v zsh)" || warn "Could not change default shell"
+  if have chsh && have fish; then
+    if [[ "${SHELL:-}" != "$(command -v fish)" ]]; then
+      chsh -s "$(command -v fish)" || warn "Could not change default shell"
     fi
   fi
 fi

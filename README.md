@@ -11,7 +11,7 @@ This repo packages your shell, terminal, editor, and CLI setup into a portable d
 
 ## Features
 
-- Shared shell environment for `bash` and `zsh`
+- Shared shell environment for `bash` and `fish`
 - Role-based bootstrap for base, web, mobile, and DevOps tooling
 - `mise` runtime bootstrap for Node.js, Python, Java, Go, Rust, Bun, and Deno
 - Flutter SDK and Android SDK command-line bootstrap for mobile work
@@ -78,7 +78,7 @@ Other available flags:
 - `--no-vendor`: skip vendor bootstraps (like `mise`, Flutter SDK, and Android SDK).
 - `--no-git`: skip git user configuration.
 - `--no-github`: skip GitHub authentication and SSH key setup.
-- `--skip-shell-change`: do not attempt to change the default shell to `zsh`.
+- `--skip-shell-change`: do not attempt to change the default shell to `fish`.
 
 ## Install Behavior
 
@@ -99,7 +99,7 @@ Other available flags:
 
 ## Included Config
 
-- Shell: `.zshrc`, `.bashrc`, `.profile`, shared shell helpers
+- Shell: `config.fish`, `.bashrc`, `.profile`, shared shell helpers
 - Runtime manager: `mise` config for Node.js, Python, Java, Go, Rust, Bun, and Deno
 - Prompt and terminal: Starship, Kitty, Alacritty
 - CLI UX: tmux (with sessionizer, cheatsheet, and clipboard-bridge scripts), btop, Atuin

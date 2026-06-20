@@ -407,7 +407,7 @@ install_web_vendor_tools() {
   install_mise_toolchains
   install_uv_if_missing
   install_rustup_if_missing
-  install_fzf_tab
+  install_fish_plugins
   install_mkcert
   install_mongosh
   install_usql
@@ -430,7 +430,7 @@ install_mobile_vendor_tools() {
   install_mise_toolchains
   install_uv_if_missing
   install_rustup_if_missing
-  install_fzf_tab
+  install_fish_plugins
   install_flutter_sdk
   install_android_cmdline_tools
   install_maestro
@@ -442,7 +442,7 @@ install_devops_vendor_tools() {
   install_mise_toolchains
   install_uv_if_missing
   install_rustup_if_missing
-  install_fzf_tab
+  install_fish_plugins
   install_terragrunt
   install_stern
   install_trivy
@@ -773,17 +773,10 @@ install_flyctl() {
   log "Installing flyctl"
   curl -fsSL https://fly.io/install.sh | FLYCTL_INSTALL="$HOME/.local" sh >/dev/null 2>&1 || warn "flyctl install failed"
 }
-
-install_fzf_tab() {
-  local plugin_dir="$HOME/.config/zsh/plugins/fzf-tab"
-  if [[ -d "$plugin_dir/.git" ]]; then
-    git -C "$plugin_dir" pull --ff-only >/dev/null 2>&1 || warn "fzf-tab update failed"
-    return 0
-  fi
-  log "Installing fzf-tab zsh plugin"
-  mkdir -p "$(dirname "$plugin_dir")"
-  git clone --depth 1 https://github.com/Aloxaf/fzf-tab "$plugin_dir" >/dev/null 2>&1 \
-    || warn "fzf-tab install failed"
+install_fish_plugins() {
+  # Placeholder for fish plugin bootstrapping.
+  # Fisher or similar can be added here when needed.
+  return 0
 }
 
 install_gext() {
@@ -801,7 +794,7 @@ bootstrap_role_vendors() {
   install_mise_toolchains
   install_uv_if_missing
   install_rustup_if_missing
-  install_fzf_tab
+  install_fish_plugins
   install_jetbrains_mono_nerd_font
   install_tpm
   install_yq

@@ -13,13 +13,5 @@ fi
 if command -v atuin >/dev/null 2>&1; then
   eval "$(atuin init bash)"
 fi
-eval "$(starship init bash)"
 
-# opencode
-export PATH=/home/woodzo/.opencode/bin:$PATH
-export PATH=$PATH:$HOME/.maestro/bin
-
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:/home/woodzo/.lmstudio/bin"
-# End of LM Studio CLI section
-
+[[ -f "$HOME/.bashrc.local" ]] && source "$HOME/.bashrc.local"

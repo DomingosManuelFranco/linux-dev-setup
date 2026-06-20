@@ -37,7 +37,7 @@ verify_command() {
 
 verify_post_install() {
   verify_command "git"
-  verify_command "zsh"
+  verify_command "fish"
   verify_command "nvim"
   if [[ "$INSTALL_VENDOR" -eq 1 ]]; then
     verify_command "mise"
