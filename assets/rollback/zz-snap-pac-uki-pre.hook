@@ -1,0 +1,22 @@
+# Build a bootable UKI for the pre-transaction snapper snapshot.
+#
+# snap-pac's own pre hook (snap-pac-pre.hook) creates the pre snapshot during
+# PreTransaction. This hook is named "zz-..." so it sorts after snap-pac's hook
+# and therefore runs once that snapshot already exists. The on-disk kernel at
+# PreTransaction time is still the PRE-upgrade kernel, which matches the just
+# created snapshot -- so the resulting UKI can boot even if the upgrade that
+# follows ships a broken kernel.
+#
+# A build failure is intentionally non-fatal (no AbortOnFail): protection must
+# never block a pacman transaction.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Creating bootable UKI for the pre-transaction snapper snapshot...
+When = PreTransaction
+Exec = /usr/local/bin/snapper-bootable-uki pre

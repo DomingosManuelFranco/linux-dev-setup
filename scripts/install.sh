@@ -10,12 +10,15 @@ source "$REPO_ROOT/lib/common.sh"
 source "$REPO_ROOT/lib/packages.sh"
 # shellcheck source=../lib/vendor.sh
 source "$REPO_ROOT/lib/vendor.sh"
+# shellcheck source=../lib/rollback.sh
+source "$REPO_ROOT/lib/rollback.sh"
 
 DESKTOP=""
 INSTALL_OPTIONAL=0
 INSTALL_VENDOR=1
 SETUP_GIT=1
 SETUP_GITHUB=1
+SETUP_ROLLBACK=1
 NON_INTERACTIVE=0
 SKIP_SHELL_CHANGE=0
 GIT_NAME=""
@@ -187,9 +190,13 @@ while [[ $# -gt 0 ]]; do
       SETUP_GITHUB=0
       shift
       ;;
+    --no-rollback)
+      SETUP_ROLLBACK=0
+      shift
+      ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor] [--no-git] [--no-github] [--non-interactive] [--git-name NAME] [--git-email EMAIL] [--skip-shell-change]
+Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devops] [--optional] [--no-vendor] [--no-git] [--no-github] [--no-rollback] [--non-interactive] [--git-name NAME] [--git-email EMAIL] [--skip-shell-change]
 
   --desktop            apply optional desktop-specific settings
   --roles              comma-separated install roles; default is 'base' only
@@ -197,6 +204,7 @@ Usage: ./scripts/install.sh [--desktop gnome|kde] [--roles base,web,mobile,devop
   --no-vendor          skip vendor bootstraps
   --no-git             skip git user configuration
   --no-github          skip GitHub authentication and SSH key setup
+  --no-rollback        skip btrfs rollback system setup (Arch + btrfs + systemd-boot only)
   --non-interactive    run without prompting for input
   --git-name NAME      set git user.name
   --git-email EMAIL    set git user.email
@@ -242,6 +250,7 @@ fi
 log "Optional GUI apps: $INSTALL_OPTIONAL"
 log "Vendor tools: $INSTALL_VENDOR"
 log "Non-interactive: $NON_INTERACTIVE"
+log "Rollback system: $SETUP_ROLLBACK"
 
 filter_arch_packages() {
   filtered=()
@@ -363,6 +372,10 @@ setup_rust
 install_npm_globals
 install_vscode_extensions
 enable_systemd_units
+
+if [[ "$SETUP_ROLLBACK" -eq 1 && "$distro" == "arch" ]]; then
+  setup_rollback_system
+fi
 
 if [[ "$SETUP_GIT" -eq 1 ]]; then
   setup_git

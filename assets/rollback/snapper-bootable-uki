@@ -1,0 +1,282 @@
+#!/usr/bin/env bash
+# snapper-bootable-uki
+#
+# Maintains bootable Unified Kernel Images (UKIs) for snapper snapshots on an
+# Arch Linux system that boots via systemd-boot + btrfs (root on subvolume @).
+#
+# Each selected snapshot gets its own UKI in /boot/EFI/Linux/ (the systemd-boot
+# Type #2 auto-discovery directory). The UKI embeds a kernel command line that
+# points rootflags=subvol at the snapshot's subvolume, so the snapshot becomes
+# a bootable entry in the systemd-boot menu -- exactly like openSUSE's grub-btrfs
+# integration, but for systemd-boot.
+#
+# The UKI is rebuilt with the kernel image currently on disk at build time, so:
+#   * when called from a pacman PreTransaction hook, the on-disk kernel is the
+#     PRE-upgrade kernel, which matches the just-created pre snapshot;
+#   * when called at boot, the on-disk kernel is the running kernel, which
+#     matches the just-created boot snapshot.
+# This guarantees a bootable recovery UKI with a matching kernel even when a
+# kernel upgrade later turns out to be unbootable.
+#
+# Subcommands:
+#   pre    Build a bootable UKI for the newest snapper snapshot (pacman hook).
+#   boot   Build a bootable UKI for the newest snapper snapshot (boot service).
+#   init   Build a bootable UKI for the newest snapshot (initial setup).
+#   sync   Prune UKIs whose snapshot was deleted, and enforce the keep limit.
+#   list   Print the bootable UKIs and the snapshots they map to.
+#
+# Exit status is always 0 from pre/boot/init/sync so a build failure can never
+# block a pacman transaction (protection should never get in the way of pacman).
+
+set -u
+set -o pipefail
+
+CONFIG="${SNAPPER_BOOTABLE_UKI_CONFIG:-root}"
+ESP_UKI_DIR="${SNAPPER_BOOTABLE_UKI_DIR:-/boot/EFI/Linux}"
+KEEP="${SNAPPER_BOOTABLE_UKI_KEEP:-5}"
+CMDLINE_SRC="${SNAPPER_BOOTABLE_UKI_CMDLINE:-/etc/kernel/cmdline}"
+KIMG="${SNAPPER_BOOTABLE_UKI_KERNEL:-/boot/vmlinuz-linux}"
+MKINITCPIO_CONF="${SNAPPER_BOOTABLE_UKI_MKINITCPIO_CONF:-/etc/mkinitcpio.conf}"
+SPLASH="/usr/share/systemd/bootctl/splash-arch.bmp"
+[[ -f "$SPLASH" ]] || SPLASH=""        # only pass --splash if the file exists
+NEED_MB=160                      # minimum free ESP space required before a build
+LOG_TAG="snapper-bootable-uki"
+
+log()  { printf '%s: %s\n' "$LOG_TAG" "$*" >&2; }
+warn() { printf '%s: WARNING: %s\n' "$LOG_TAG" "$*" >&2; }
+err()  { printf '%s: ERROR: %s\n' "$LOG_TAG" "$*" >&2; }
+
+# ---- snapper helpers (must run as root) -------------------------------------
+
+# Print snapshot numbers (one per line, numeric > 0), newest last.
+# snapper list uses Unicode box-drawing chars as column separators; sed converts
+# them to ASCII pipe so awk -F'|' can split reliably (byte-level, locale-safe).
+snap_numbers() {
+    snapper -c "$CONFIG" list 2>/dev/null \
+        | sed 's/│/|/g' \
+        | awk -F'|' 'NR>2 {
+              n=$1; gsub(/[[:space:]]/,"",n);
+              if (n ~ /^[0-9]+$/ && n+0 > 0) print n+0
+          }' | sort -n
+}
+
+# Print the newest snapshot number, or empty if none.
+newest_snap() {
+    snap_numbers | tail -1
+}
+
+# Print "type date" for a snapshot number (best effort, may be empty).
+# snapper list columns (after sed, -F'|', 1-indexed): 1=# 2=Type 3=Pre# 4=Date
+# 5=User 6=Cleanup 7=Description 8=Userdata
+snap_meta() {
+    local n="$1"
+    snapper -c "$CONFIG" list 2>/dev/null \
+        | sed 's/│/|/g' \
+        | awk -F'|' -v want="$n" 'NR>2 {
+              num=$1; gsub(/[[:space:]]/,"",num);
+              if (num == want) {
+                  t=$2; d=$4;
+                  gsub(/^[[:space:]]+|[[:space:]]+$/,"",t);
+                  gsub(/^[[:space:]]+|[[:space:]]+$/,"",d);
+                  print t, d;
+                  exit;
+              }
+          }'
+}
+
+# Print UKI snapshot numbers currently on the ESP, newest last.
+uki_numbers() {
+    ls "$ESP_UKI_DIR" 2>/dev/null \
+        | grep -oE 'arch-snap-[0-9]+\.efi' \
+        | grep -oE '[0-9]+' | sort -n
+}
+
+uki_path() { printf '%s/arch-snap-%s.efi' "$ESP_UKI_DIR" "$1"; }
+
+# ---- ESP space management ---------------------------------------------------
+
+esp_free_mb() {
+    df -BM --output=avail "$ESP_UKI_DIR" 2>/dev/null | tail -1 | tr -dc '0-9'
+}
+
+# Remove oldest bootable UKIs until at least NEED_MB is free on the ESP.
+ensure_esp_space() {
+    local free oldest
+    while :; do
+        free=$(esp_free_mb)
+        [[ "$free" =~ ^[0-9]+$ ]] || { err "cannot determine ESP free space"; return 1; }
+        (( free >= NEED_MB )) && return 0
+        oldest=$(uki_numbers | head -1)
+        if [[ -z "$oldest" ]]; then
+            err "ESP has only ${free}M free, need ${NEED_MB}M, and no snapshot UKIs left to prune"
+            return 1
+        fi
+        warn "ESP low (${free}M free < ${NEED_MB}M); removing oldest UKI (snap $oldest)"
+        rm -f "$(uki_path "$oldest")" || return 1
+    done
+}
+
+# Remove UKIs whose snapshot no longer exists, then keep only newest $KEEP.
+prune_ukis() {
+    local snaps ukins n kept
+    snaps=$(snap_numbers)
+    for n in $(uki_numbers); do
+        if ! printf '%s\n' "$snaps" | grep -qx "$n"; then
+            log "pruning UKI for deleted snapshot $n"
+            rm -f "$(uki_path "$n")"
+        fi
+    done
+    # keep newest $KEEP, remove the rest (uki_numbers is sorted oldest-first)
+    local -a all; mapfile -t all < <(uki_numbers)
+    local total=${#all[@]}
+    local i
+    for ((i=0; i<total; i++)); do
+        n=${all[i]}
+        if (( i < total - KEEP )); then
+            log "pruning excess UKI (snap $n); keep=$KEEP"
+            rm -f "$(uki_path "$n")"
+        fi
+    done
+}
+
+# ---- UKI build --------------------------------------------------------------
+
+build_uki_for_snapshot() {
+    local n="$1" uki cmdfile osrelfile subvol meta type date kver
+    n=$((${n//[^0-9]/}))
+    [[ "$n" =~ ^[0-9]+$ ]] || { err "bad snapshot number '$1'"; return 1; }
+
+    uki="$(uki_path "$n")"
+    if [[ -f "$uki" ]]; then
+        log "snap $n already has a bootable UKI; skipping"
+        return 0
+    fi
+
+    # verify the snapshot exists
+    snap_numbers | grep -qx "$n" || { err "snapshot $n not found"; return 1; }
+
+    # snapshot subvolume path relative to the btrfs top level
+    subvol="@/.snapshots/${n}/snapshot"
+
+    cmdfile=$(mktemp) || return 1
+    osrelfile=$(mktemp) || { rm -f "$cmdfile"; return 1; }
+
+    # Build the kernel command line: take the base cmdline and replace the
+    # subvol= argument with the snapshot's subvolume.
+    if [[ -f "$CMDLINE_SRC" ]]; then
+        sed -E "s|rootflags=subvol=[^[:space:]]*|rootflags=subvol=${subvol}|" "$CMDLINE_SRC" > "$cmdfile"
+    else
+        printf 'root=/dev/ArchinstallVg/root rootflags=subvol=%s rw rootfstype=btrfs ' "$subvol" > "$cmdfile"
+    fi
+    grep -q 'rootflags=' "$cmdfile" || printf ' rootflags=subvol=%s ' "$subvol" >> "$cmdfile"
+
+    meta=$(snap_meta "$n")
+    if [[ -z "$meta" ]]; then
+        type="snap"; date=""
+    else
+        type=${meta%% *}
+        date=${meta#* }
+        [[ "$date" == "$meta" ]] && date=""   # no space -> only one word, no date
+    fi
+    kver=$(file -b "$KIMG" 2>/dev/null | grep -oE 'version [0-9][^ ,)]+' | awk '{print $2}')
+    [[ -n "$kver" ]] || kver=$(uname -r)
+
+    cat > "$osrelfile" <<EOF
+NAME="Arch Linux"
+PRETTY_NAME="Arch Linux (snap $n ${type:-snap} ${date})"
+ID=arch
+BUILD_ID=rolling
+VERSION_ID="$kver"
+ANSI_COLOR="38;2;23;147;209"
+LOGO=archlinux-logo
+EOF
+
+    log "building bootable UKI for snapshot $n (subvol=$subvol, kernel=$kver)"
+    if mkinitcpio -k "$KIMG" -c "$MKINITCPIO_CONF" \
+            --uki "$uki" --cmdline "$cmdfile" --osrelease "$osrelfile" \
+            ${SPLASH:+--splash "$SPLASH"} 2>&1 | sed 's/^/    mkinitcpio: /' >&2; then
+        log "built $(basename "$uki")"
+        rm -f "$cmdfile" "$osrelfile"
+        return 0
+    else
+        local rc=$?
+        err "mkinitcpio failed for snapshot $n (rc=$rc); removing partial UKI"
+        rm -f "$cmdfile" "$osrelfile" "$uki"
+        return $rc
+    fi
+}
+
+# ---- subcommands ------------------------------------------------------------
+
+cmd_pre()   { _build_newest; }
+cmd_boot()  { _build_newest; }
+cmd_init()  { _build_newest; }
+
+_build_newest() {
+    local n
+    n=$(newest_snap)
+    if [[ -z "$n" ]]; then
+        warn "no snapper snapshots exist yet; nothing to make bootable"
+        return 1
+    fi
+    prune_ukis || true
+    ensure_esp_space || return 1
+    build_uki_for_snapshot "$n" || return 1
+}
+
+cmd_sync() {
+    prune_ukis || true
+}
+
+cmd_list() {
+    local n uki meta
+    printf '%-6s %-26s %s\n' "SNAP" "BOOTABLE-UKI" "SNAPSHOT (type date)"
+    printf -- '-----------------------------------------------------------------------------\n'
+    for n in $(uki_numbers | sort -n); do
+        uki="$(uki_path "$n")"
+        meta=$(snap_meta "$n")
+        printf '%-6s %-26s %s\n' "$n" "$(basename "$uki")" "$meta"
+    done
+    if [[ -z "$(uki_numbers)" ]]; then
+        printf '(no bootable UKIs present)\n'
+    fi
+    local free; free=$(esp_free_mb)
+    printf '\nESP free: %sM   keep=%s   dir=%s\n' "${free:-?}" "$KEEP" "$ESP_UKI_DIR"
+}
+
+usage() {
+    cat <<EOF
+snapper-bootable-uki -- bootable snapper snapshots for systemd-boot + btrfs
+
+Usage: snapper-bootable-uki <command>
+
+Commands:
+  pre     build a bootable UKI for the newest snapshot (pacman PreTransaction)
+  boot    build a bootable UKI for the newest snapshot (at boot)
+  init    build a bootable UKI for the newest snapshot (initial setup)
+  sync    prune stale/excess UKIs without building
+  list    show bootable UKIs and the snapshots they map to
+
+Config (via environment):
+  SNAPPER_BOOTABLE_UKI_CONFIG   snapper config name        (default: root)
+  SNAPPER_BOOTABLE_UKI_DIR      ESP UKI directory          (default: /boot/EFI/Linux)
+  SNAPPER_BOOTABLE_UKI_KEEP     max bootable UKIs to keep  (default: 5)
+  SNAPPER_BOOTABLE_UKI_CMDLINE  base kernel cmdline file   (default: /etc/kernel/cmdline)
+  SNAPPER_BOOTABLE_UKI_KERNEL   kernel image to embed      (default: /boot/vmlinuz-linux)
+EOF
+}
+
+main() {
+    case "${1:-}" in
+        pre)  shift; cmd_pre  "$@" ;;
+        boot) shift; cmd_boot "$@" ;;
+        init) shift; cmd_init "$@" ;;
+        sync) shift; cmd_sync "$@" ;;
+        list) shift; cmd_list "$@" ;;
+        -h|--help|help) usage ;;
+        "") usage; return 0 ;;
+        *) err "unknown command '$1'"; usage; return 2 ;;
+    esac
+}
+
+main "$@"

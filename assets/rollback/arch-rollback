@@ -1,0 +1,353 @@
+#!/usr/bin/env bash
+# arch-rollback
+#
+# Roll the Arch Linux root subvolume (@) back to a snapper snapshot, openSUSE /
+# NixOS style. Designed for the archinstall btrfs layout: root on subvolume @,
+# with snapshots stored under @/.snapshots/<n>/snapshot (i.e. /.snapshots is a
+# directory inside @, not a separate subvolume).
+#
+# Workflow (the openSUSE flow, adapted to systemd-boot):
+#   1. Something breaks the system.
+#   2. Reboot, pick a "Arch Linux (snap N ...)" entry from the systemd-boot menu.
+#      That boots the chosen snapshot read-only.
+#   3. Log in, run:  arch-rollback N
+#   4. Reboot into the normal "Arch Linux" entry. You are now on snapshot N.
+#
+# What this script does to @:
+#   - snapshots the current @ to @.old-<timestamp>  (read-only undo backup)
+#   - renames current @ -> @.old-<timestamp>
+#   - creates a fresh read-write @ from snapshot N
+#   - cleans the new @'s stale /.snapshots entries so snapper starts clean
+#   - sets the btrfs default subvolume to the new @
+#   - keeps the last KEEP_OLD @.old-* backups, deletes older ones
+#
+# The old snapshots remain intact on disk under @.old-*/.snapshots and can be
+# inspected at /mnt/btrfs-root/@.old-<ts> if needed.
+#
+# It is safest to run this from a booted snapshot (so @ is not your live root).
+# Running it from the live system is supported with --force and performs a
+# "rollback on next reboot".
+
+set -euo pipefail
+
+CONFIG="${ARCH_ROLLBACK_CONFIG:-root}"
+MNT="${ARCH_ROLLBACK_MNT:-/mnt/btrfs-root}"
+KEEP_OLD="${ARCH_ROLLBACK_KEEP_OLD:-2}"
+
+color() { :; }   # no color unless tty
+if [[ -t 2 ]]; then
+    color() { printf '\033[%sm\033[1m%s\033[0m' "$1" "$2"; }
+fi
+
+say()  { printf '%s\n' "$*" >&2; }
+warn() { printf '%s %s\n' "$(color 33 WARN)"  "$*" >&2; }
+err()  { printf '%s %s\n' "$(color 31 ERROR)" "$*" >&2; }
+ok()   { printf '%s %s\n' "$(color 32 OK)"    "$*" >&2; }
+
+usage() {
+    cat <<EOF
+arch-rollback -- roll Arch's @ subvolume back to a snapper snapshot
+
+Usage:
+  arch-rollback <N>              roll back to snapshot N
+  arch-rollback <N> --dry-run    show what would happen, change nothing
+  arch-rollback <N> --force      allow running from the live @ (rollback on reboot)
+  arch-rollback --list           list snapshots (bootable ones marked)
+  arch-rollback --backups        list @.old-* undo backups
+  arch-rollback --undo           undo the last rollback (restore newest @.old)
+  arch-rollback --undo --dry-run
+
+Run from a booted snapshot for safety. See snapper-bootable-uki list for the
+snapshots that appear in the systemd-boot menu.
+EOF
+}
+
+# ---- helpers ----------------------------------------------------------------
+
+snap_numbers() {
+    snapper -c "$CONFIG" list 2>/dev/null \
+        | sed 's/│/|/g' \
+        | awk -F'|' 'NR>2 {
+              n=$1; gsub(/[[:space:]]/,"",n);
+              if (n ~ /^[0-9]+$/ && n+0 > 0) print n+0
+          }' | sort -n
+}
+
+snap_exists() {
+    local n="$1"
+    snap_numbers | grep -qx "$n"
+}
+
+root_dev() {
+    findmnt -no SOURCE / 2>/dev/null \
+        | sed -E 's/\[.*\]$//' \
+        | head -1
+}
+
+live_root_subvol() {
+    # print the subvol= option the running root is mounted with (e.g. "/@")
+    local subvol
+    subvol=$(findmnt -no OPTIONS / 2>/dev/null | grep -oE 'subvol=[^,]+' | head -1)
+    subvol=${subvol#subvol=}
+    printf '%s' "$subvol"
+}
+
+live_root_is_at() {
+    # true if the running system's root is mounted from subvol given as $1
+    local want="$1" cur
+    cur=$(live_root_subvol)
+    [[ "$cur" == "$want" || "$cur" == "/$want" ]]
+}
+
+booted_in_snapshot() {
+    # true if the running root is a snapshot subvol (contains /.snapshots/)
+    case "$(live_root_subvol)" in
+        */.snapshots/*) return 0 ;; *) return 1 ;;
+    esac
+}
+
+mount_toplevel() {
+    local dev
+    dev=$(root_dev)
+    [[ -n "$dev" ]] || { err "cannot determine btrfs root device"; return 1; }
+    [[ -b "$dev" ]] || { err "root device '$dev' is not a block device"; return 1; }
+    mkdir -p "$MNT"
+    if findmnt -n "$MNT" >/dev/null 2>&1; then
+        warn "$MNT already mounted; using it"
+    else
+        mount -o subvolid=5 "$dev" "$MNT" || { err "mounting $dev at $MNT (subvolid=5) failed"; return 1; }
+    fi
+    ok "mounted btrfs top-level ($dev) at $MNT"
+}
+
+umount_toplevel() {
+    if findmnt -n "$MNT" >/dev/null 2>&1; then
+        umount "$MNT" 2>/dev/null || warn "could not unmount $MNT (busy?)"
+    fi
+}
+
+subvol_id() {
+    btrfs subvolume show "$1" 2>/dev/null | awk '/Subvolume ID/ {print $3; exit}'
+}
+
+# ---- list -------------------------------------------------------------------
+
+cmd_list() {
+    local n meta uki
+    printf '%-6s %-10s %-26s %s\n' "SNAP" "BOOTABLE" "TYPE/DATE" "DESCRIPTION-ISH"
+    printf -- '-------------------------------------------------------------------------\n'
+    local bootable; bootable=$(ls /boot/EFI/Linux 2>/dev/null | grep -oE 'arch-snap-[0-9]+\.efi' | grep -oE '[0-9]+' | sort -n)
+    for n in $(snap_numbers); do
+        meta=$(snapper -c "$CONFIG" list 2>/dev/null \
+            | sed 's/│/|/g' \
+            | awk -F'|' -v want="$n" 'NR>2 {
+                  num=$1; gsub(/[[:space:]]/,"",num);
+                  if (num==want) {
+                      t=$2; d=$4; desc=$7;
+                      gsub(/^[[:space:]]+|[[:space:]]+$/,"",t);
+                      gsub(/^[[:space:]]+|[[:space:]]+$/,"",d);
+                      gsub(/^[[:space:]]+|[[:space:]]+$/,"",desc);
+                      print t " " d " | " desc;
+                      exit;
+                  }
+              }')
+        if printf '%s\n' "$bootable" | grep -qx "$n"; then uki="yes"; else uki=""; fi
+        printf '%-6s %-10s %s\n' "$n" "${uki:+$(color 32 yes)}" "$meta"
+    done
+}
+
+cmd_backups() {
+    mount_toplevel
+    local b
+    for b in $(ls -d "$MNT"/@.old-* 2>/dev/null | sort); do
+        printf '%s\n' "$b"
+    done
+    umount_toplevel
+}
+
+# ---- rollback ---------------------------------------------------------------
+
+do_rollback() {
+    local n dry=0 force=0
+    n=$((${1//[^0-9]/}))
+    [[ "$n" =~ ^[0-9]+$ ]] || { err "snapshot number required"; usage; return 2; }
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run) dry=1 ;;
+            --force)   force=1 ;;
+            *) ;;
+        esac
+        shift
+    done
+
+    snap_exists "$n" || { err "snapshot $n does not exist"; return 1; }
+
+    local live=0
+    if live_root_is_at "@"; then live=1; fi
+    if [[ $live -eq 1 && $force -eq 0 && $dry -eq 0 ]]; then
+        warn "you are running from the live @ subvolume."
+        warn "It is safer to reboot into a snapshot first, then run: arch-rollback $n"
+        warn "Use --force to perform a rollback-on-next-reboot from the live system."
+        return 1
+    fi
+    [[ $live -eq 1 && $force -eq 1 ]] && warn "--force: live @ will be demoted; rollback applies on next reboot"
+
+    local ts snap_old new_at
+    ts=$(date +%Y%m%d-%H%M%S)
+    snap_old="$MNT/@.old-$ts"
+    new_at="$MNT/@"
+
+    mount_toplevel
+
+    [[ -d "$MNT/@" ]] || { err "no @ subvolume found at $MNT/@"; umount_toplevel; return 1; }
+
+    say "Plan:"
+    say "  current @      -> $snap_old   (undo backup)"
+    say "  snapshot $n    -> $new_at      (new read-write root)"
+    say "  keep last $KEEP_OLD @.old-* backups"
+    if [[ $dry -eq 1 ]]; then
+        say "(dry-run: no changes made)"
+        umount_toplevel
+        return 0
+    fi
+
+    # 1. rename current @ out of the way (instant; nested snapshot subvols
+    #    move with it, so the snapshot history is preserved under @.old-$ts).
+    say "Renaming current @ -> @.old-$ts"
+    btrfs subvolume rename "$MNT/@" "$snap_old" \
+        || { err "failed to rename @ (is it busy/mounted elsewhere?)"; umount_toplevel; return 1; }
+
+    # make the backup read-only when it is not the live root
+    if [[ $live -eq 0 ]]; then
+        btrfs property set "$snap_old" ro true 2>/dev/null || warn "could not set $snap_old read-only"
+    fi
+
+    # 2. create the new read-write @ from the target snapshot (now under @.old-$ts)
+    local snap_target="$snap_old/.snapshots/$n/snapshot"
+    [[ -d "$snap_target" ]] || {
+        err "snapshot $n subvolume not found at $snap_target"
+        err "restoring previous @"
+        btrfs subvolume rename "$snap_old" "$MNT/@" 2>/dev/null || true
+        umount_toplevel; return 1
+    }
+    say "Creating new @ from snapshot $n"
+    btrfs subvolume snapshot "$snap_target" "$MNT/@" >/dev/null \
+        || { err "failed to create new @; restoring previous @"
+             btrfs subvolume rename "$snap_old" "$MNT/@" 2>/dev/null || true
+             umount_toplevel; return 1; }
+
+    # 3. the new @ was created from a snapshot; btrfs snapshots do NOT include
+    #    nested subvolumes, so new @'s /.snapshots is a stale regular directory.
+    #    snapper needs it to be a btrfs subvolume. Remove the stale dir and create
+    #    a fresh @/.snapshots subvolume (old snapshot history stays under @.old-$ts).
+    setup_snapshots_subvol "$MNT/@"
+
+    # 4. set the btrfs default subvolume to the new @ (hygiene; bootloader uses subvol=@)
+    local newid; newid=$(subvol_id "$MNT/@")
+    if [[ -n "$newid" ]]; then
+        btrfs subvolume set-default "$newid" "$MNT" 2>/dev/null \
+            && ok "default subvolume set to new @ (id $newid)" \
+            || warn "could not set default subvolume (bootloader uses subvol=@ anyway)"
+    fi
+
+    # 5. prune old @.old-* backups (keep newest $KEEP_OLD)
+    prune_old_backups
+
+    umount_toplevel
+    ok "rollback to snapshot $n complete."
+    say ""
+    say "Next: reboot into the normal 'Arch Linux' boot entry:  systemctl reboot"
+    if [[ $live -eq 1 ]]; then
+        say "      (you ran with --force: the rollback takes effect on next reboot)"
+    fi
+}
+
+setup_snapshots_subvol() {
+    local root="$1" snapdir
+    snapdir="$root/.snapshots"
+
+    # After creating new @ from a snapshot, @/.snapshots is a regular directory
+    # (btrfs snapshots exclude nested subvolumes). snapper requires /.snapshots
+    # to be a btrfs subvolume. Remove the stale dir and create a fresh subvolume.
+    if btrfs subvolume show "$snapdir" >/dev/null 2>&1; then
+        ok "@/.snapshots already a subvolume -- nothing to do"
+        return 0
+    fi
+
+    if [[ -d "$snapdir" ]]; then
+        say "Removing stale /.snapshots directory in new @"
+        rm -rf "$snapdir" || { err "could not remove stale $snapdir"; return 1; }
+    fi
+
+    say "Creating fresh @/.snapshots subvolume"
+    btrfs subvolume create "$snapdir" >/dev/null \
+        || { err "failed to create @/.snapshots subvolume"; return 1; }
+    chmod 750 "$snapdir"
+    ok "created fresh @/.snapshots subvolume (snapper starts with empty history;"
+    ok "old snapshots remain under @.old-*/.snapshots for inspection)"
+}
+
+prune_old_backups() {
+    local arr i total
+    local -a backups
+    mapfile -t backups < <(ls -d "$MNT"/@.old-* 2>/dev/null | sort -r)
+    total=${#backups[@]}
+    for ((i=KEEP_OLD; i<total; i++)); do
+        say "Deleting old undo backup: ${backups[i]}"
+        btrfs subvolume delete "${backups[i]}" >/dev/null 2>&1 \
+            || warn "could not delete ${backups[i]}"
+    done
+}
+
+# ---- undo -------------------------------------------------------------------
+
+do_undo() {
+    local dry=0
+    [[ "${1:-}" == "--dry-run" ]] && dry=1
+
+    mount_toplevel
+    local -a backups
+    mapfile -t backups < <(ls -d "$MNT"/@.old-* 2>/dev/null | sort -r)
+    [[ ${#backups[@]} -gt 0 ]] || { err "no @.old-* backups to undo"; umount_toplevel; return 1; }
+    local newest="${backups[0]}"
+    say "Undo plan: restore $newest as @, demote current @ to @.old-<ts>"
+    if [[ $dry -eq 1 ]]; then
+        say "(dry-run: no changes made)"
+        umount_toplevel; return 0
+    fi
+    local ts; ts=$(date +%Y%m%d-%H%M%S)
+    # demote current @
+    btrfs subvolume rename "$MNT/@" "$MNT/@.old-$ts" \
+        || { err "could not rename current @"; umount_toplevel; return 1; }
+    # promote the backup to @ and make it read-write
+    btrfs subvolume rename "$newest" "$MNT/@" \
+        || { err "could not promote backup; restoring previous @"
+             btrfs subvolume rename "$MNT/@.old-$ts" "$MNT/@" 2>/dev/null || true
+             umount_toplevel; return 1; }
+    btrfs property set "$MNT/@" ro false 2>/dev/null || true
+    local newid; newid=$(subvol_id "$MNT/@")
+    [[ -n "$newid" ]] && btrfs subvolume set-default "$newid" "$MNT" 2>/dev/null || true
+    prune_old_backups
+    umount_toplevel
+    ok "undo complete. Reboot into 'Arch Linux': systemctl reboot"
+}
+
+# ---- main -------------------------------------------------------------------
+
+main() {
+    case "${1:-}" in
+        --list)    shift; cmd_list; return $? ;;
+        --backups) shift; cmd_backups; return $? ;;
+        --undo)    shift; do_undo "${1:-}"; return $? ;;
+        -h|--help|help|"") usage; return 0 ;;
+        *)
+            if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+                do_rollback "$@"
+                return $?
+            fi
+            err "unknown argument '$1'"; usage; return 2 ;;
+    esac
+}
+
+main "$@"

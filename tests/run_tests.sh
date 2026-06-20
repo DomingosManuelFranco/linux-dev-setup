@@ -7,6 +7,7 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/lib/common.sh"
 source "$REPO_ROOT/lib/packages.sh"
 source "$REPO_ROOT/lib/vendor.sh"
+source "$REPO_ROOT/lib/rollback.sh"
 
 record_required_pkg_failure() {
   local pkg="$1"
@@ -655,6 +656,68 @@ test_install_jetbrains_toolbox_optional_failure() {
   pass "jetbrains toolbox optional failure handling"
 }
 
+test_rollback_lib_parses() {
+  echo "--- Running test_rollback_lib_parses ---"
+
+  bash -n "$REPO_ROOT/lib/rollback.sh" || fail "lib/rollback.sh failed shell syntax check"
+  pass "rollback lib parses"
+}
+
+test_rollback_assets_exist() {
+  echo "--- Running test_rollback_assets_exist ---"
+
+  local assets="$REPO_ROOT/assets/rollback"
+  [[ -f "$assets/snapper-bootable-uki" ]] || fail "Missing assets/rollback/snapper-bootable-uki"
+  [[ -f "$assets/arch-rollback" ]] || fail "Missing assets/rollback/arch-rollback"
+  [[ -f "$assets/zz-snap-pac-uki-pre.hook" ]] || fail "Missing assets/rollback/zz-snap-pac-uki-pre.hook"
+  [[ -f "$assets/snapper-bootable-uki-boot.service" ]] || fail "Missing assets/rollback/snapper-bootable-uki-boot.service"
+
+  bash -n "$assets/snapper-bootable-uki" || fail "snapper-bootable-uki failed shell syntax check"
+  bash -n "$assets/arch-rollback" || fail "arch-rollback failed shell syntax check"
+
+  pass "rollback assets exist and parse"
+}
+
+test_rollback_prerequisites_non_arch() {
+  echo "--- Running test_rollback_prerequisites_non_arch ---"
+
+  (
+    detect_distro() { printf 'fedora\n'; }
+    if rollback_prerequisites_met; then
+      fail "Expected prerequisites to fail on non-Arch distro"
+    fi
+  )
+  pass "rollback prerequisites correctly skip non-Arch distros"
+}
+
+test_rollback_prerequisites_non_btrfs() {
+  echo "--- Running test_rollback_prerequisites_non_btrfs ---"
+
+  (
+    detect_distro() { printf 'arch\n'; }
+    findmnt() { printf 'ext4\n'; }
+    if rollback_prerequisites_met; then
+      fail "Expected prerequisites to fail on non-btrfs root"
+    fi
+  )
+  pass "rollback prerequisites correctly skip non-btrfs root"
+}
+
+test_rollback_snapper_unicode_parsing() {
+  echo "--- Running test_rollback_snapper_unicode_parsing ---"
+
+  local output
+  output=$(printf ' # │ Type   │ Pre # │ Date                            │ User │ Cleanup  │ Description                                     │ Userdata\n───┼────────┼───────┼─────────────────────────────────┼──────┼──────────┼─────────────────────────────────┼─────────\n 0 │ single │       │                                 │ root │          │ current                                         │\n 1 │ single │       │ Sat 20 Jun 2026 02:00:07 PM WAT │ root │ timeline │ timeline                                        │\n11 │ single │       │ Sat 20 Jun 2026 09:36:42 PM WAT │ root │          │ rollback system baseline (installed 2026-06-20) │\n' \
+    | sed 's/│/|/g' \
+    | awk -F'|' 'NR>2 {
+        n=$1; gsub(/[[:space:]]/,"",n);
+        if (n ~ /^[0-9]+$/ && n+0 > 0) print n+0
+      }' | sort -n | tail -1)
+
+  [[ "$output" == "11" ]] || fail "Expected newest snapshot 11, got '$output'"
+  pass "rollback snapper Unicode list parsing works"
+}
+
 test_install_script_parses
 test_distro_detection
 test_package_resolution
@@ -676,5 +739,11 @@ test_setup_git_non_interactive
 test_setup_github_non_interactive_token
 test_setup_github_missing_public_key_scope_warns
 test_install_jetbrains_toolbox_optional_failure
+
+test_rollback_lib_parses
+test_rollback_assets_exist
+test_rollback_prerequisites_non_arch
+test_rollback_prerequisites_non_btrfs
+test_rollback_snapper_unicode_parsing
 
 echo "All tests passed."

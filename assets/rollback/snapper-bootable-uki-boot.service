@@ -1,0 +1,13 @@
+[Unit]
+Description=Create a bootable UKI for the boot snapper snapshot
+Documentation=man:snapper-bootable-uki
+Wants=snapper-boot.service
+After=snapper-boot.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/snapper-bootable-uki boot
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
