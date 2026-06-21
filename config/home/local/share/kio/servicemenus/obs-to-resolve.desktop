@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Service
+Name=OBS to Resolve
+MimeType=video/mp4;video/x-matroska;video/quicktime;video/avi;video/webm;video/mpeg;video/*;
+Actions=obsToResolve;obsToResolveHqx;
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+Icon=application-video
+
+[Desktop Action obsToResolve]
+Name=Prepare for Resolve — DNxHR HQ
+Icon=application-video
+Exec=obs-to-resolve %F
+
+[Desktop Action obsToResolveHqx]
+Name=Prepare for Resolve — DNxHR HQX
+Icon=application-video
+Exec=obs-to-resolve --profile hqx --audio pcm_s24le %F

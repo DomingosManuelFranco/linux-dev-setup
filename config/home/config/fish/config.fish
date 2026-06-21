@@ -32,6 +32,8 @@ if command -v ruby >/dev/null 2>&1
 end
 
 # ── Environment ──────────────────────────────────────────────────────────────
+set -g fish_greeting
+
 set -gx EDITOR "nvim"
 set -gx VISUAL "nvim"
 set -gx TERMINAL "kitty"

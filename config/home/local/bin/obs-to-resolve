@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+#
+# obs-to-resolve — transcode OBS recordings into a DaVinci Resolve Free-friendly
+# intermediate format on Arch Linux.
+#
+# DaVinci Resolve Free on Linux cannot decode H.264/H.265/HEVC video or AAC audio.
+# This script converts the video stream to Avid DNxHR and keeps lossless audio
+# untouched when possible (e.g. OBS FFmpeg PCM). Lossy/compressed audio is
+# re-encoded to Apple Lossless (ALAC). The output container is MOV, which Resolve
+# Free handles well.
+#
+# Usage:
+#   obs-to-resolve recording.mkv
+#   obs-to-resolve *.mov
+#   obs-to-resolve --profile hqx --hwaccel cuda recording.mkv
+#
+
+set -euo pipefail
+
+PROG="obs-to-resolve"
+VERSION="1.1.0"
+
+# Defaults
+PROFILE="hq"                 # dnxhr profile: lb, sq, hq, hqx, 444
+AUDIO_CODEC="alac"           # fallback audio codec: alac | pcm_s16le | pcm_s24le | pcm_s32le
+CONTAINER="mov"              # mov | mkv (mov is best for Resolve)
+SUFFIX="_resolve"
+OUTPUT_DIR=""                # empty = resolve-ready/ next to each input
+JOBS=1
+OVERWRITE=0
+DRY_RUN=0
+COPY_AUDIO=0                 # 1 = always copy audio
+HWACCEL=""                   # cuda | vaapi | qsv | videotoolbox | auto
+
+# Audio codecs that Resolve supports and that we can safely copy without loss.
+declare -a LOSSLESS_AUDIO_CODECS=(
+  pcm_s16le pcm_s24le pcm_s32le pcm_u8 pcm_s8
+  pcm_alaw pcm_mulaw
+  alac flac truehd
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+log() {
+  printf '[%s] %s\n' "$PROG" "$*"
+}
+
+warn() {
+  printf '[%s] warning: %s\n' "$PROG" "$*" >&2
+}
+
+error() {
+  printf '[%s] error: %s\n' "$PROG" "$*" >&2
+}
+
+have() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+notify() {
+  local urgency="${2:-normal}"
+  if have notify-send; then
+    notify-send --app-name="$PROG" --urgency="$urgency" "$PROG" "$1"
+  fi
+}
+
+in_array() {
+  local needle="$1"
+  local item
+  shift
+  for item; do
+    if [[ "$item" == "$needle" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+usage() {
+  cat <<EOF
+$PROG v$VERSION — transcode OBS recordings for DaVinci Resolve Free (Linux)
+
+Usage: $PROG [OPTIONS] FILE [FILE ...]
+
+Options:
+  -p, --profile PROFILE   DNxHR profile: lb, sq, hq, hqx, 444 (default: hq)
+  -a, --audio CODEC       Fallback audio codec when input is not lossless:
+                          alac, pcm_s16le, pcm_s24le, pcm_s32le (default: alac)
+  --copy-audio            Always copy the audio stream as-is
+  -c, --container EXT     Output container: mov, mkv (default: mov)
+  --hwaccel MODE          Hardware decoder: cuda, vaapi, qsv, videotoolbox, auto
+  -o, --output-dir DIR    Output directory (default: resolve-ready/ beside input)
+  -s, --suffix SUFFIX     Filename suffix before extension (default: _resolve)
+  -j, --jobs N            Parallel conversions (default: 1)
+  -y, --yes               Overwrite existing output files
+  -n, --dry-run           Print ffmpeg commands without running
+  -h, --help              Show this help
+  -v, --version           Show version
+
+Examples:
+  $PROG recording.mkv
+  $PROG --profile hqx --hwaccel cuda *.mov
+  $PROG --output-dir ~/Videos/Resolve --copy-audio *.mov
+
+Note:
+  DaVinci Resolve Free on Linux does not support H.264/H.265/HEVC video or AAC
+  audio. DNxHR + PCM/ALAC in MOV is the safest intermediate format. This script
+  auto-copies lossless audio (PCM/ALAC/FLAC) and only re-encodes lossy audio.
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+
+ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -p|--profile)
+      PROFILE="$2"; shift 2 ;;
+    -a|--audio)
+      AUDIO_CODEC="$2"; shift 2 ;;
+    --copy-audio)
+      COPY_AUDIO=1; shift ;;
+    -c|--container)
+      CONTAINER="$2"; shift 2 ;;
+    --hwaccel)
+      HWACCEL="$2"; shift 2 ;;
+    -o|--output-dir)
+      OUTPUT_DIR="$2"; shift 2 ;;
+    -s|--suffix)
+      SUFFIX="$2"; shift 2 ;;
+    -j|--jobs)
+      JOBS="$2"; shift 2 ;;
+    -y|--yes)
+      OVERWRITE=1; shift ;;
+    -n|--dry-run)
+      DRY_RUN=1; shift ;;
+    -h|--help)
+      usage; exit 0 ;;
+    -v|--version)
+      printf '%s v%s\n' "$PROG" "$VERSION"; exit 0 ;;
+    --)
+      shift; ARGS+=("$@"); break ;;
+    -*)
+      error "unknown option: $1"; usage; exit 1 ;;
+    *)
+      ARGS+=("$1"); shift ;;
+  esac
+done
+
+if [[ ${#ARGS[@]} -eq 0 ]]; then
+  error "no input files provided"
+  usage
+  exit 1
+fi
+
+# Validate profile
+PROFILE_LOWER="${PROFILE,,}"
+case "$PROFILE_LOWER" in
+  lb|sq|hq|hqx|444) ;;
+  *) error "invalid DNxHR profile: $PROFILE"; exit 1 ;;
+esac
+
+# Validate fallback audio codec
+case "$AUDIO_CODEC" in
+  alac|pcm_s16le|pcm_s24le|pcm_s32le) ;;
+  *) error "invalid audio codec: $AUDIO_CODEC"; exit 1 ;;
+esac
+
+# Validate container
+case "$CONTAINER" in
+  mov|mkv) ;;
+  *) error "invalid container: $CONTAINER"; exit 1 ;;
+esac
+
+# Validate hwaccel
+case "$HWACCEL" in
+  ""|cuda|vaapi|qsv|videotoolbox|auto) ;;
+  *) error "invalid hwaccel mode: $HWACCEL"; exit 1 ;;
+esac
+
+# Validate dependencies
+if ! have ffmpeg; then
+  error "ffmpeg is required. Install it with: sudo pacman -S ffmpeg"
+  exit 1
+fi
+
+if [[ $JOBS -gt 1 ]] && ! have parallel; then
+  warn "GNU parallel not found; falling back to sequential processing"
+  JOBS=1
+fi
+
+# ---------------------------------------------------------------------------
+# Conversion logic
+# ---------------------------------------------------------------------------
+
+detect_audio_codec() {
+  local input="$1"
+  ffprobe -v error \
+    -select_streams a:0 \
+    -show_entries stream=codec_name \
+    -of default=nw=1:nk=1 \
+    "$input" 2>/dev/null || true
+}
+
+convert_one() {
+  local input="$1"
+
+  if [[ ! -f "$input" ]]; then
+    warn "file not found: $input"
+    return 1
+  fi
+
+  local dir name base out_dir out_file
+  dir="$(dirname -- "$input")"
+  name="$(basename -- "$input")"
+  base="${name%.*}"
+
+  if [[ -n "$OUTPUT_DIR" ]]; then
+    out_dir="$OUTPUT_DIR"
+  else
+    out_dir="$dir/resolve-ready"
+  fi
+
+  mkdir -p "$out_dir"
+
+  out_file="$out_dir/${base}${SUFFIX}.${CONTAINER}"
+
+  if [[ -f "$out_file" && "$OVERWRITE" -eq 0 && "$DRY_RUN" -eq 0 ]]; then
+    warn "output already exists (use -y to overwrite): $out_file"
+    return 1
+  fi
+
+  # Decide audio handling
+  local audio_codec=""
+  local audio_strategy="copy"
+  local audio_codec_arg="copy"
+
+  audio_codec="$(detect_audio_codec "$input")"
+
+  if [[ "$COPY_AUDIO" -eq 1 ]]; then
+    audio_strategy="copy (forced)"
+    audio_codec_arg="copy"
+  elif [[ -n "$audio_codec" ]] && in_array "$audio_codec" "${LOSSLESS_AUDIO_CODECS[@]}"; then
+    audio_strategy="copy ($audio_codec)"
+    audio_codec_arg="copy"
+  else
+    audio_strategy="re-encode ($AUDIO_CODEC)"
+    audio_codec_arg="$AUDIO_CODEC"
+  fi
+
+  # Build ffmpeg command
+  local -a ffmpeg_args=(
+    -hide_banner -loglevel warning -stats
+  )
+
+  if [[ -n "$HWACCEL" ]]; then
+    if [[ "$HWACCEL" == "auto" ]]; then
+      if have nvidia-smi; then
+        ffmpeg_args+=(-hwaccel cuda -hwaccel_output_format cuda)
+      elif [[ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]] && have vainfo; then
+        ffmpeg_args+=(-hwaccel vaapi)
+      fi
+    else
+      ffmpeg_args+=(-hwaccel "$HWACCEL")
+      if [[ "$HWACCEL" == "cuda" ]]; then
+        ffmpeg_args+=(-hwaccel_output_format cuda)
+      fi
+    fi
+  fi
+
+  ffmpeg_args+=(-i "$input")
+  ffmpeg_args+=(-map 0:v:0?)
+
+  if [[ -n "$audio_codec" ]]; then
+    ffmpeg_args+=(-map 0:a:0?)
+  fi
+
+  ffmpeg_args+=(-c:v dnxhd)
+  ffmpeg_args+=(-profile:v "dnxhr_${PROFILE_LOWER}")
+  ffmpeg_args+=(-pix_fmt yuv422p)
+  ffmpeg_args+=(-c:a "$audio_codec_arg")
+
+  if [[ "$OVERWRITE" -eq 1 ]]; then
+    ffmpeg_args+=(-y)
+  else
+    ffmpeg_args+=(-n)
+  fi
+
+  ffmpeg_args+=("$out_file")
+
+  log "converting: $input -> $out_file"
+  log "  video=dnxhr_${PROFILE_LOWER} audio=${audio_strategy} container=${CONTAINER}"
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'ffmpeg %s\n' "${ffmpeg_args[*]}"
+    return 0
+  fi
+
+  if ffmpeg "${ffmpeg_args[@]}"; then
+    log "finished: $out_file"
+    return 0
+  else
+    warn "conversion failed: $input"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+log "profile=dnxhr_${PROFILE_LOWER} fallback_audio=${AUDIO_CODEC} container=${CONTAINER} copy_audio=${COPY_AUDIO} hwaccel=${HWACCEL:-none}"
+
+FAILED=0
+
+if [[ $JOBS -gt 1 ]]; then
+  export -f convert_one detect_audio_codec in_array log warn error have notify
+  export PROFILE_LOWER AUDIO_CODEC CONTAINER SUFFIX OUTPUT_DIR OVERWRITE DRY_RUN COPY_AUDIO HWACCEL PROG LOSSLESS_AUDIO_CODECS
+  if ! parallel --jobs "$JOBS" convert_one ::: "${ARGS[@]}"; then
+    FAILED=1
+  fi
+else
+  for input in "${ARGS[@]}"; do
+    if ! convert_one "$input"; then
+      FAILED=1
+    fi
+  done
+fi
+
+if [[ "$FAILED" -eq 0 ]]; then
+  log "all conversions complete"
+  notify "All files are ready for DaVinci Resolve" normal
+else
+  error "one or more conversions failed"
+  notify "One or more conversions failed" critical
+  exit 1
+fi
